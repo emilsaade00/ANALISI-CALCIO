@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+raw/
+.DS_Store
+# il database e i dati esportati si rigenerano a ogni aggiornamento
+db/
+web/data/
+.pytest_cache/

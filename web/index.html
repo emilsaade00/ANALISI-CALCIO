@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calcio in chiaro</title>
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0d4a33">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l]),.evt td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;const h=c.closest('table').tHead;c.dataset.l=h&&h.rows[0].cells[i]?h.rows[0].cells[i].textContent:''}}).observe(document,{childList:true,subtree:true})</script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#oggi">Calcio <b>in chiaro</b></a>
+  <nav class="nav scroll" aria-label="Sezioni">
+    <a href="#oggi" data-r="oggi">Oggi</a>
+    <a href="#campionati" data-r="campionati">Campionati</a>
+    <a href="#statistiche" data-r="stat">Statistiche</a>
+    <a href="#arbitri" data-r="arbitri">Arbitri</a>
+    <a href="#giocatori" data-r="giocator">Giocatori</a>
+    <a href="#precisione" data-r="precisione">Quanto è preciso?</a>
+    <a href="#fonti" data-r="fonti">Fonti</a>
+  </nav>
+  <div id="status" class="status"></div>
+</header>
+<main id="app" aria-live="polite"><section class="band"><p class="empty">Caricamento dei dati…</p></section></main>
+<footer class="foot">
+  <p>Serie A, Premier League, Bundesliga, LaLiga. Analisi costruite solo su dati sportivi: nessuna quota o pronostico dei bookmaker. Orari in ora italiana. <a href="#metodo">Metodo</a> · <a href="#fonti">Fonti e aggiornamenti</a></p>
+</footer>
+<script src="model.js"></script>
+<script src="core.js"></script>
+<script src="match.js"></script>
+<script src="views.js"></script>
+<script>try{if('serviceWorker' in navigator&&location.protocol==='https:'&&window.top===window.self)navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}</script>
+</body>
+</html>

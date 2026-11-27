@@ -1,0 +1,17 @@
+{
+  "name": "Calcio in chiaro",
+  "short_name": "Calcio",
+  "description": "Analisi e pronostici di Serie A, Premier League, Bundesliga e LaLiga costruiti solo su dati sportivi.",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d4a33",
+  "theme_color": "#0d4a33",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
