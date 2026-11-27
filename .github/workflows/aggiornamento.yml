@@ -1,0 +1,78 @@
+name: Aggiornamento quotidiano
+on:
+schedule:
+- cron: "15 6 * * *"
+workflow_dispatch:
+permissions:
+contents: write
+pages: write
+id-token: write
+Calcio in chiaro: installazione passo per passo dal tablet
+Page 2 of 8 concurrency: aggiornamento
+jobs:
+aggiorna:
+runs-on: ubuntu-latest
+timeout-minutes: 50
+steps:
+- uses: actions/checkout@v4
+- name: Installazione o aggiornamento (estrae lo zip caricato)
+run: |
+ZIP=$(ls -1 *.zip 2>/dev/null | head -1 || true)
+if [ -n "$ZIP" ]; then
+MSG="Installazione iniziale"
+unzip -q "$ZIP" -d /tmp/pkg
+SRC=$(dirname "$(find /tmp/pkg -type d -name pipeline | head
+-1)")
+rm -rf "$SRC/.github"
+# aggiornamento: l'archivio dei pronostici salvati nel repository
+non viene sovrascritto
+if [ -d pipeline ]; then MSG="Aggiornamento applicazione da
+$ZIP"; rm -rf "$SRC/data/pronostici"; fi
+cp -a "$SRC"/. ./
+git rm -q "$ZIP"
+git config user.name "aggiornamento-automatico"
+git config user.email "41898282+github-
+actions[bot]@users.noreply.github.com"
+git add -A && git commit -qm "$MSG" && git push
+fi
+- uses: actions/setup-python@v5
+with:
+python-version: "3.12"
+- uses: actions/cache/restore@v4
+with:
+path: db
+key: calcio-db-${{ github.run_id }}
+restore-keys: calcio-db-
+- name: Aggiorna dati, pronostici e verifica
+env:
+FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
+API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+run: bash scripts/aggiorna.sh
+- uses: actions/cache/save@v4
+if: always()
+with:
+path: db
+key: calcio-db-${{ github.run_id }}
+- name: Archivia i pronostici
+Calcio in chiaro: installazione passo per passo dal tablet
+Page 3 of 8 run: |
+git config user.name "aggiornamento-automatico"
+git config user.email "41898282+github-
+actions[bot]@users.noreply.github.com"
+git add data/pronostici
+git diff --cached --quiet || git commit -qm "Pronostici $(date -u
++%F)"
+git push
+- uses: actions/configure-pages@v5
+- uses: actions/upload-pages-artifact@v3
+with:
+path: web
+pubblica:
+needs: aggiorna
+runs-on: ubuntu-latest
+environment:
+name: github-pages
+url: ${{ steps.deploy.outputs.page_url }}
+steps:
+- id: deploy
+uses: actions/deploy-pages@v4
