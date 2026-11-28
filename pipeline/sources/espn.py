@@ -159,7 +159,7 @@ def _role(pos):
     return ROLE.get((pos or "").split("-")[0].upper(), "Giocatore di movimento")
 
 
-def _apply(con, cnt, resolver, league, season, eid, c, log, unknown):
+def _apply(con, cnt, resolver, league, season, eid, c, log, unknown, stats):
     h = resolver.resolve(league, c["home"] or "", "espn", allow_new=False)
     a = resolver.resolve(league, c["away"] or "", "espn", allow_new=False)
     if not h or not a:
@@ -210,13 +210,18 @@ def _apply(con, cnt, resolver, league, season, eid, c, log, unknown):
                 scored.append((s, r["player_id"]))
             scored.sort(reverse=True)
             if not scored or scored[0][0] < 2 or (len(scored) > 1 and scored[1][0] == scored[0][0]):
+                stats["non_abbinati"] += 1
+                if len(stats["esempi"]) < 8:
+                    stats["esempi"].append(f"{p['name']} #{p.get('jersey')}")
                 continue
+            stats["abbinati"] += 1
             pid = scored[0][1]
             con.execute("INSERT OR REPLACE INTO player_map(source, ext_id, player_id) VALUES('espn',?,?)", (p["id"], pid))
             known[p["id"]] = pid
             vals = {k: v for k, v in vals.items() if k in SA_EXTRA}
         else:
             pid = known.get(p["id"]) or f"espn-{p['id']}"
+            stats["solo_espn"] += 1
             if pid.startswith("espn-"):
                 con.execute("INSERT INTO player(id,name,team_id,position,source) VALUES(?,?,?,?,?) "
                             "ON CONFLICT(id) DO UPDATE SET name=excluded.name, team_id=excluded.team_id, position=excluded.position",
@@ -266,10 +271,14 @@ def fetch(con, cnt, resolver, league, season, log):
         if fetched % 25 == 0:
             con.commit()
     applied, unknown = 0, set()
+    stats = {"abbinati": 0, "non_abbinati": 0, "solo_espn": 0, "esempi": []}
     for r in con.execute("SELECT k, v FROM kv WHERE k LIKE ?", (f"espn:{league}:%",)).fetchall():
-        if _apply(con, cnt, resolver, league, season, r["k"].split(":")[2], json.loads(r["v"]), log, unknown):
+        if _apply(con, cnt, resolver, league, season, r["k"].split(":")[2], json.loads(r["v"]), log, unknown, stats):
             applied += 1
     if unknown:
         log(f"{league}: squadre ESPN non riconosciute {sorted(unknown)}")
     log(f"{league} {season}: {len(events)} partite concluse su ESPN, {fetched} lette ora, {applied} abbinate")
+    if league != "pl":
+        log(f"{league} {season}: presenze giocatore abbinate ai report ufficiali {stats['abbinati']}, non abbinate {stats['non_abbinati']}"
+            f"{' (es. ' + ', '.join(stats['esempi']) + ')' if stats['esempi'] else ''}, solo ESPN {stats['solo_espn']}")
     return applied
