@@ -1,0 +1,41 @@
+name: Sonda fonti (temporaneo)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sonda:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Controlla i campi disponibili
+        shell: python
+        run: |
+          import json, urllib.request
+          def get(u):
+              req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0 (calcio-in-chiaro)"})
+              return json.loads(urllib.request.urlopen(req, timeout=30).read())
+          for lg in ["ita.1", "eng.1", "ger.1", "esp.1"]:
+              print("=====", lg)
+              try:
+                  sb = get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{lg}/scoreboard?dates=20261101-20261127&limit=200")
+              except Exception as e:
+                  print("scoreboard errore", e); continue
+              evs = [e for e in sb.get("events", []) if e["status"]["type"].get("completed")]
+              print("partite concluse:", len(evs))
+              if not evs: continue
+              ev = evs[-1]; print("evento", ev["id"], ev["name"], ev["date"])
+              s = get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{lg}/summary?event={ev['id']}")
+              print("chiavi:", list(s.keys()))
+              for t in s.get("boxscore", {}).get("teams", []):
+                  print("squadra", t["team"]["displayName"], [(x.get("name"), x.get("displayValue")) for x in t.get("statistics", [])])
+              for r in s.get("rosters", [])[:1]:
+                  ro = r.get("roster", [])
+                  print("giocatori in rosa:", len(ro))
+                  for p in ro[:3]:
+                      print(" ", p.get("athlete", {}).get("displayName"), p.get("position", {}).get("abbreviation"), p.get("starter"), p.get("subbedIn"), p.get("subbedOut"))
+                      print("   stats:", [(x.get("name"), x.get("value")) for x in p.get("stats", [])])
+              ke = s.get("keyEvents") or []
+              print("keyEvents:", len(ke), sorted({k.get("type", {}).get("text") for k in ke if isinstance(k, dict)}))
+              co = s.get("commentary") or []
+              print("commentary:", len(co))
