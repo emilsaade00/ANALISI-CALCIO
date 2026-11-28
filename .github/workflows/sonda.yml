@@ -17,11 +17,14 @@ jobs:
               return json.loads(urllib.request.urlopen(req, timeout=30).read())
           for lg in ["ita.1", "eng.1", "ger.1", "esp.1"]:
               print("=====", lg)
-              try:
-                  sb = get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{lg}/scoreboard?dates=20261101-20261127&limit=200")
-              except Exception as e:
-                  print("scoreboard errore", e); continue
-              evs = [e for e in sb.get("events", []) if e["status"]["type"].get("completed")]
+              evs = []
+              for d in ["20261108", "20261109", "20261107", "20261101", "20261102", "20261031"]:
+                  try:
+                      sb = get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{lg}/scoreboard?dates={d}")
+                  except Exception as e:
+                      print("scoreboard errore", d, e); continue
+                  evs += [e for e in sb.get("events", []) if e["status"]["type"].get("completed")]
+                  if evs: break
               print("partite concluse:", len(evs))
               if not evs: continue
               ev = evs[-1]; print("evento", ev["id"], ev["name"], ev["date"])
