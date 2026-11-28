@@ -15,6 +15,16 @@ def _w(path, obj):
     return path.stat().st_size
 
 
+def _app_version():
+    """Versione dell'app web (costante APP_VERSION in web/core.js): l'app aperta si ricarica se e' piu' vecchia."""
+    import re
+    try:
+        m = re.search(r"APP_VERSION = '([^']+)'", (config.ROOT / "web" / "core.js").read_text(encoding="utf-8"))
+        return m.group(1) if m else None
+    except OSError:
+        return None
+
+
 def export(con, evaluation, sources_info, resolver, log, now_ts=None):
     now_ts = now_ts or time.time()
     out = config.EXPORT_DIR
@@ -171,7 +181,7 @@ def export(con, evaluation, sources_info, resolver, log, now_ts=None):
     params = db.kv_get(con, "params", {})
     meta = {
         "generato": db.now_iso(), "ultimo_aggiornamento_riuscito": last_ok["finished_at"] if last_ok else None,
-        "versione_modello": config.MODEL_VERSION, "fuso": config.TZ_DISPLAY,
+        "versione_modello": config.MODEL_VERSION, "versione_app": _app_version(), "fuso": config.TZ_DISPLAY,
         "stagione_corrente": config.CURRENT_SEASON, "stagione_taratura": config.TUNING_SEASON,
         "stagioni_valutazione": config.EVAL_SEASONS,
         "campionati": leagues_meta, "fonti": fonti, "avvisi": avvisi, "copertura": coverage,

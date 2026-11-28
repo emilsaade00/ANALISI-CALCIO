@@ -216,3 +216,28 @@ td.hl{background:rgba(245,197,24,.16);font-weight:700}
 .sel.chk input{width:22px;height:22px}
 table.tips td{vertical-align:top}
 table.tips b.big{font-size:20px}
+
+.promo{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0;padding:14px 18px;border-radius:14px;background:var(--pitch);color:#fff;text-decoration:none}
+.promo b{font-family:'Barlow Condensed',sans-serif;font-size:24px;letter-spacing:.2px;color:var(--accent)}
+.promo span{flex:1 1 260px;font-size:15px;opacity:.95}.promo i{font-style:normal;font-size:28px;color:var(--accent)}
+
+.pitchwrap{max-width:520px;margin:6px auto}
+svg.pitch{width:100%;height:auto;display:block;border-radius:14px}
+svg.pitch .pg{fill:#2f7d4a}svg.pitch .ps{fill:#2a7344}
+svg.pitch .pl rect,svg.pitch .pl line,svg.pitch .pl circle{fill:none;stroke:rgba(255,255,255,.75);stroke-width:3}
+svg.pitch .pp circle{stroke:#0d241a;stroke-width:3}
+svg.pitch .ph circle{fill:var(--accent)}svg.pitch .pa circle{fill:#fff}
+svg.pitch .pn{font:700 22px Inter,system-ui,sans-serif;text-anchor:middle;fill:#14241c}
+svg.pitch .pnm{font:600 19px Inter,system-ui,sans-serif;text-anchor:middle;fill:#fff;paint-order:stroke;stroke:#0d241a;stroke-width:5px;stroke-linejoin:round}
+svg.pitch .pc{font:700 15px Inter,system-ui,sans-serif;fill:#fff;paint-order:stroke;stroke:#0d241a;stroke-width:4px}
+.lineup-lab{display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;margin:6px 0}
+.lineup-lab .dot{width:14px;height:14px;border-radius:50%;display:inline-block;border:2px solid #0d241a}
+.lineup-lab .dot.ph{background:var(--accent)}.lineup-lab .dot.pa{background:#fff}
+
+td.sigs{min-width:190px}
+.sg{display:inline-block;font-size:12.5px;line-height:1.2;padding:3px 8px;margin:2px 4px 2px 0;border-radius:999px;background:var(--soft);white-space:nowrap}
+.sg.ok{background:color-mix(in srgb,var(--good) 20%,transparent);color:var(--good);font-weight:600}
+.sg.ko{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
+input.qin{width:110px;font:inherit;font-size:17px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);min-height:44px}
+.vq{display:block;margin-top:6px;font-size:14px}.vq b{font-size:16px}
+.vq.ok{color:var(--good)}.vq.mid{color:var(--ink)}.vq.ko{color:var(--muted)}

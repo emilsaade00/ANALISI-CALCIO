@@ -93,19 +93,23 @@ def compact(summary):
     teams = {c["team"]["id"]: c.get("homeAway") for c in comp["competitors"]}
     names = {c.get("homeAway"): c["team"]["displayName"] for c in comp["competitors"]}
     out = {"date": comp.get("date"), "home": names.get("home"), "away": names.get("away"),
-           "status": (comp.get("status") or {}).get("type", {}).get("completed"), "team": {}, "players": [], "subs": [], "reds": []}
+           "status": (comp.get("status") or {}).get("type", {}).get("completed"), "team": {}, "players": [], "subs": [], "reds": [],
+           "formation": {}}
     for t in (summary.get("boxscore") or {}).get("teams", []):
         side = teams.get(t["team"]["id"])
         if side:
             out["team"][side] = {x["name"]: x.get("displayValue") for x in t.get("statistics", []) if x.get("name") in TEAM}
     for r in summary.get("rosters") or []:
         side = r.get("homeAway") or teams.get((r.get("team") or {}).get("id"))
+        if r.get("formation"):
+            out["formation"][side] = str(r.get("formation"))
         for p in r.get("roster") or []:
             a = p.get("athlete") or {}
             st = {x.get("name"): x.get("value") for x in p.get("stats") or []}
             out["players"].append({"id": a.get("id"), "name": a.get("displayName"), "full": a.get("fullName"),
                                    "last": a.get("lastName"), "jersey": p.get("jersey"), "side": side,
                                    "pos": (p.get("position") or {}).get("abbreviation"), "starter": bool(p.get("starter")),
+                                   "fp": p.get("formationPlace"),
                                    "in": bool(p.get("subbedIn")), "out": bool(p.get("subbedOut")),
                                    "stats": {k: v for k, v in st.items() if k in PLAYER or k in GK_ONLY or k == "appearances"}})
     for k in summary.get("keyEvents") or []:
@@ -289,7 +293,7 @@ def _candidates(con, tid, sources):
     return out
 
 
-def lineups(con, cnt, resolver, league, season, c, log):
+def lineups(con, cnt, resolver, league, season, c, log, played=False):
     """Formazioni ufficiali (titolari e panchina) pubblicate da ESPN prima del calcio d'inizio."""
     h = resolver.resolve(league, c["home"] or "", "espn", allow_new=False)
     a = resolver.resolve(league, c["away"] or "", "espn", allow_new=False)
@@ -324,7 +328,11 @@ def lineups(con, cnt, resolver, league, season, c, log):
             pid = f"espn-{p['id']}"
             con.execute("INSERT INTO player(id,name,team_id,position,source) VALUES(?,?,?,?,?) ON CONFLICT(id) DO NOTHING",
                         (pid, p["name"], tid, _role(p["pos"]), "espn"))
-        rows.append((mid, tid, pid, "titolare" if p["starter"] else "panchina", "ufficiale", "espn", db.now_iso(), None))
+        det = {"p": p.get("pos"), "n": p.get("jersey"), "f": p.get("fp")}
+        if p["starter"] and (c.get("formation") or {}).get(p["side"]):
+            det["m"] = c["formation"][p["side"]]
+        rows.append((mid, tid, pid, "titolare" if p["starter"] else "panchina", "ufficiale", "espn",
+                     None if played else db.now_iso(), json.dumps({k: v for k, v in det.items() if v not in (None, "")}, separators=(",", ":"))))
     con.execute("DELETE FROM lineup WHERE match_id=? AND kind='ufficiale' AND source='espn'", (mid,))
     con.executemany("INSERT OR REPLACE INTO lineup(match_id,team_id,player_id,status,kind,source,updated_at,detail) VALUES(?,?,?,?,?,?,?,?)", rows)
     cnt.rows_new += len(rows)
@@ -390,8 +398,10 @@ def fetch(con, cnt, resolver, league, season, log):
     applied, unknown = 0, set()
     stats = {"abbinati": 0, "non_abbinati": 0, "solo_espn": 0, "esempi": [], "ruoli": {}, "sigle": Counter()}
     for r in con.execute("SELECT k, v FROM kv WHERE k LIKE ?", (f"espn:{league}:%",)).fetchall():
-        if _apply(con, cnt, resolver, league, season, r["k"].split(":")[2], json.loads(r["v"]), log, unknown, stats):
+        c = json.loads(r["v"])
+        if _apply(con, cnt, resolver, league, season, r["k"].split(":")[2], c, log, unknown, stats):
             applied += 1
+            lineups(con, db.Counter(), resolver, league, season, c, log, played=True)  # formazioni con posizioni in campo
     # ruolo prevalente (difensore, centrocampista, attaccante) dalle posizioni in campo ESPN;
     # i portieri dei report Lega restano portieri
     for pid, cn in stats["ruoli"].items():

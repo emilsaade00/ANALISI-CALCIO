@@ -1,7 +1,7 @@
 /* Centro partita: schede, confronto, corner, pronostico, eventi, risultato. */
 (function () {
   const { esc, nf, pc } = C;
-  const TABS = [['panoramica', 'Panoramica'], ['confronto', 'Confronto squadre'], ['giocatori', 'Giocatori'], ['arbitro', 'Arbitro'],
+  const TABS = [['panoramica', 'Panoramica'], ['confronto', 'Confronto squadre'], ['giocatori', 'Formazioni e giocatori'], ['arbitro', 'Arbitro'],
     ['corner', 'Corner'], ['pronostico', 'Pronostico'], ['eventi', 'Eventi'], ['risultato', 'Risultato']];
   const MLAB = { gol: 'gol', corner: 'corner', tiri: 'tiri', tiri_porta: 'tiri in porta', falli: 'falli', cartellini: 'cartellini' };
   const MLAB1 = { gol: 'gol', corner: 'corner', tiri: 'tiro', tiri_porta: 'tiro in porta', falli: 'fallo', cartellini: 'cartellino' };
@@ -528,6 +528,72 @@
       `<tr><td><a href="#giocatore-${r.pid}">${esc(r.name)}</a><div class="sub">${esc(r.team)} · ${esc(r.role)}</div></td>${r.ps.map((p, i) => okEv[i] ? `<td class="num ${i === k ? 'hl' : ''}">${p == null ? '<span class="miss" title="non rilevato dalla fonte per questo giocatore">n.r.</span>' : pc(p)}</td>` : '').join('')}<td class="num">${Math.round(r.exp)}'</td><td class="num">${r.min}' · ${r.starts} tit.</td></tr>`).join('')}</tbody></table></div>
       <p class="note">Le probabilità presuppongono la titolarità: minuti attesi = media delle ultime 5 gare da titolare. Modello di Poisson sul ritmo per 90 minuti della stagione, solo partite precedenti. Affidabilità: non valutabile (nessuno storico di verifica per gli eventi giocatore).${anyNr ? ' «n.r.» = dato non rilevato dalla fonte per quel giocatore (per esempio i tiri dei portieri nei report della Lega).' : ''}${nrEv.length ? ' Esclusi per questa voce (dato non rilevato): ' + nrEv.map(esc).join(', ') + '.' : ''}</p>`;
   }
+  // ---------- formazioni disposte in campo
+  const ROW = { G: 0, GK: 0, D: 1, CD: 1, CB: 1, LB: 1, RB: 1, SW: 1, LCB: 1, RCB: 1, LWB: 1, RWB: 1, WB: 1, FB: 1,
+    DM: 2, CDM: 2, LDM: 2, RDM: 2, M: 3, CM: 3, LM: 3, RM: 3, LCM: 3, RCM: 3, AM: 4, CAM: 4, LAM: 4, RAM: 4,
+    F: 5, FW: 5, CF: 5, ST: 5, S: 5, SS: 5, LW: 5, RW: 5, LF: 5, RF: 5, RCF: 5, LCF: 5, W: 5, A: 5 };
+  const WIDE = new Set(['LB', 'RB', 'LWB', 'RWB', 'LM', 'RM', 'LW', 'RW', 'LF', 'RF']);
+  function slot(pos) {
+    const [base, suf = ''] = String(pos || '').toUpperCase().split('-');
+    if (!(base in ROW)) return null;
+    const side = suf.startsWith('L') ? -1 : suf.startsWith('R') ? 1 : base.length > 1 && base[0] === 'L' ? -1 : base.length > 1 && base[0] === 'R' ? 1 : 0;
+    return { row: ROW[base], lat: side * (WIDE.has(base) ? 2 : 1) };
+  }
+  const det = r => { try { return JSON.parse(r[4] || '{}') || {}; } catch (e) { return {}; } };
+  const shortName = n => { n = String(n || ''); const t = n.split(' '); return n.includes('.') || t.length < 2 ? n : t[t.length - 1]; };
+  // formazione ufficiale (se pubblicata) o formazione tipo: titolari piu' frequenti delle ultime 5 partite, nel ruolo piu' frequente
+  function teamLineup(x, tid) {
+    const L = (x.pl && x.pl.lineups) || {};
+    const mine = (L[x.m.i] || []).filter(r => r[1] === tid && r[3] === 'ufficiale');
+    const st = mine.filter(r => r[2] === 'titolare');
+    if (st.length >= 10) return { kind: 'ufficiale', st: st.map(r => Object.assign({ pid: r[0] }, det(r))), bench: mine.filter(r => r[2] === 'panchina').map(r => Object.assign({ pid: r[0] }, det(r))), upd: mine.map(r => r[5]).filter(Boolean).sort().pop() };
+    const past = x.d.matches.filter(z => z.g && z.t < x.m.t && (z.h === tid || z.a === tid) && (L[z.i] || []).some(r => r[1] === tid && r[2] === 'titolare')).sort((a, b) => b.t - a.t).slice(0, 5);
+    if (past.length < 2) return null;
+    const cnt = {}, pos = {}, num = {};
+    past.forEach(z => L[z.i].forEach(r => { if (r[1] !== tid || r[2] !== 'titolare') return; cnt[r[0]] = (cnt[r[0]] || 0) + 1; const d = det(r); if (d.p) (pos[r[0]] = pos[r[0]] || {})[d.p] = (pos[r[0]][d.p] || 0) + 1; if (d.n) num[r[0]] = d.n; }));
+    const ids = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]).slice(0, 11);
+    // un solo portiere: il piu' presente
+    let gk = false; const st2 = [];
+    ids.forEach(id => { const ps = pos[id] || {}; const p = Object.keys(ps).sort((a, b) => ps[b] - ps[a])[0]; const isG = p && slot(p) && slot(p).row === 0; if (isG && gk) return; if (isG) gk = true; st2.push({ pid: id, p, n: num[id], c: cnt[id] }); });
+    return { kind: 'tipo', st: st2, bench: [], n: past.length };
+  }
+  function formation(list) {
+    const m = list.map(z => z.m).find(Boolean); if (m && /^\d(-\d)+$/.test(m)) return m;
+    const c = [0, 0, 0, 0, 0, 0]; list.forEach(z => { const s = slot(z.p); if (s) c[s.row]++; });
+    return c.slice(1).filter(Boolean).join('-');
+  }
+  function placeTeam(list, home, W) {
+    const rows = {};
+    list.forEach(z => { const s = slot(z.p); if (s) (rows[s.row] = rows[s.row] || []).push(Object.assign({ lat: s.lat }, z)); });
+    const keys = Object.keys(rows).map(Number).sort((a, b) => a - b); const out = [];
+    const step = 365 / Math.max(1, keys.length - 1);
+    keys.forEach((rk, i) => {
+      const r = rows[rk].sort((a, b) => a.lat - b.lat || (+a.f || 0) - (+b.f || 0));
+      const y = home ? 945 - i * step : 55 + i * step;
+      r.forEach((z, j) => { let px = W * (j + 1) / (r.length + 1); if (!home) px = W - px; out.push(Object.assign({ x: px, y }, z)); });
+    });
+    return out;
+  }
+  function pitch(x) {
+    if (!x.pl) return '';
+    const H = teamLineup(x, x.m.h), A = teamLineup(x, x.m.a);
+    const ok = t => t && t.st.filter(z => slot(z.p)).length >= 9;
+    if (!ok(H) && !ok(A)) return '';
+    const W = 680, pn = id => (x.pl.players[id] || [id])[0];
+    const dots = (t, home) => !ok(t) ? '' : placeTeam(t.st, home, W).map(z => `<g class="pp ${home ? 'ph' : 'pa'}" transform="translate(${z.x.toFixed(0)},${z.y.toFixed(0)})"><circle r="25"/><text class="pn" y="7">${esc(z.n || '')}</text><text class="pnm" y="48">${esc(shortName(pn(z.pid)))}</text>${t.kind === 'tipo' && z.c ? `<text class="pc" x="22" y="-18">${z.c}/${t.n}</text>` : ''}</g>`).join('');
+    const lab = (t, name) => !t ? `${esc(name)}: formazione non disponibile` : `${esc(name)} <b>${esc(formation(t.st))}</b> · ${t.kind === 'ufficiale' ? 'ufficiale' + (t.upd ? ', aggiornata ' + C.hm(t.upd) : '') : `probabile (formazione tipo, ultime ${t.n} partite)`}`;
+    const bench = (t, name) => t && t.bench.length ? `<p class="sub"><b>${esc(name)}, panchina:</b> ${t.bench.map(z => `${z.n ? z.n + ' ' : ''}${esc(pn(z.pid))}`).join(', ')}</p>` : '';
+    const svg = `<svg class="pitch" viewBox="0 0 ${W} 1000" role="img" aria-label="Formazioni in campo">
+      <rect x="0" y="0" width="${W}" height="1000" class="pg"/>${Array.from({ length: 10 }, (_, i) => i % 2 ? `<rect x="0" y="${i * 100}" width="${W}" height="100" class="ps"/>` : '').join('')}
+      <g class="pl"><rect x="20" y="20" width="${W - 40}" height="960"/><line x1="20" y1="500" x2="${W - 20}" y2="500"/><circle cx="${W / 2}" cy="500" r="80"/>
+      <rect x="${W / 2 - 165}" y="20" width="330" height="150"/><rect x="${W / 2 - 75}" y="20" width="150" height="55"/>
+      <rect x="${W / 2 - 165}" y="830" width="330" height="150"/><rect x="${W / 2 - 75}" y="925" width="150" height="55"/></g>
+      ${dots(A, false)}${dots(H, true)}</svg>`;
+    return `<section><h2>Formazioni</h2><p class="lineup-lab"><span class="dot pa"></span>${lab(A, x.A)}</p>
+      <div class="pitchwrap">${svg}</div><p class="lineup-lab"><span class="dot ph"></span>${lab(H, x.H)}</p>
+      ${bench(H, x.H)}${bench(A, x.A)}
+      <p class="note">Disposizione in campo secondo i ruoli indicati da ESPN. ${H && H.kind === 'tipo' || A && A.kind === 'tipo' ? 'Formazione tipo: i titolari più frequenti nelle ultime partite, ognuno nel suo ruolo abituale (il numero in alto indica in quante è partito titolare). È una stima: la formazione ufficiale esce di solito un\'ora prima del via e l\'app la controlla ogni 30 minuti.' : ''}</p></section>`;
+  }
   function tabGiocatori(x) {
     if (!x.pl) return `<section><h2>Formazioni e giocatori</h2><p class="empty">Per ${esc(C.LGN(x.lg))} le fonti attive non forniscono dati individuali.</p>
       <p>Con una chiave API-Football (segreto <code>API_FOOTBALL_KEY</code>, istruzioni in <a href="#fonti">Fonti</a>) compaiono formazioni ufficiali, indisponibili e statistiche per giocatore: tiri, tiri in porta, dribbling tentati e riusciti, contrasti, falli commessi e subiti e altre.</p></section>`;
@@ -559,7 +625,7 @@
       return `<h3>${esc(name)}</h3><div class="scroll"><table><thead><tr><th>Giocatore</th><th>Ruolo</th><th class="num">Pres.</th><th class="num">Min</th><th class="num">Gol</th><th class="num">${esc(mm.name)}</th><th class="num">${mm.kind === 'sum' && mm.per90 ? 'per 90\'' : ''}</th></tr></thead><tbody>${list.map(({ o, v, t }) =>
         `<tr><td><a href="#giocatore-${o.pid}">${esc(o.name)}</a></td><td>${esc(o.role)}</td><td class="num">${o.app}</td><td class="num">${o.min}</td><td class="num">${o.tot.gol || 0}</td><td class="num">${C.pShow(t)}</td><td class="num">${mm.kind === 'sum' && mm.per90 ? `<b>${C.pShow(v)}</b>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Nessun dato prima di questa partita.</td></tr>'}</tbody></table></div>`;
     }).join('');
-    return `<section class="grid2">${block(x.m.h, x.H)}${block(x.m.a, x.A)}</section>
+    return `${pitch(x)}<section class="grid2">${block(x.m.h, x.H)}${block(x.m.a, x.A)}</section>
       <section><h2>Giocatori: stagione prima della gara</h2><div class="toolbar"><label class="sel">Statistica ${sel}</label></div>${stats}<p class="note">Fonte: ${esc(x.pl.fonte)}. Solo partite precedenti a questa.</p></section>
       <section><h2>Eventi giocatore</h2>${playerEvents(x)}</section>`;
   }
@@ -658,5 +724,5 @@
       if (e.target.id === 'rp-metric') { ui.rpMetric = e.target.value; render(); }
     };
   }
-  window.MatchView = { view, refStats, refTable, evLabel, FAMN };
+  window.MatchView = { view, refStats, refTable, evLabel, FAMN, load, eventRows };
 })();

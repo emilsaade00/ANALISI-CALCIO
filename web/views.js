@@ -63,6 +63,7 @@
       <label class="sel"><span class="vh">Vai alla data</span><input type="date" id="jump" value="${key}"></label>
       ${nextD ? `<a class="btn" href="#data-${nextD}" aria-label="Giorno successivo con partite">${C.dshort(nextD + 'T12:00:00Z')} ›</a>` : ''}</div></div>
       ${note ? `<p class="info">${note}</p>` : ''}${alerts()}
+      <a class="promo" href="#consigli"><b>Scommesse consigliate</b><span>Partite, giocatori, schedina più probabile ed errori di quota della prossima giornata</span><i>›</i></a>
       <div class="chips" role="group" aria-label="Filtra per campionato">${chips}</div>
       ${groups.length ? groups.map(([l, list]) => `<h2 class="lgh"><a href="#lega-${l.code}">${esc(l.name)}</a> <span class="sub">Giornata ${[...new Set(list.map(([m]) => m.mo || m.md))].join(', ')}</span></h2><div class="mlist">${list.map(([m, d, p]) => matchCard(m, d, p)).join('')}</div>`).join('')
         : '<p class="empty">Nessuna partita per il filtro scelto.</p>'}`);
@@ -626,7 +627,7 @@
   // ---------------------------------------------------------------- router
   async function route() {
     const h = decodeURIComponent(location.hash.replace(/^#/, ''));
-    app.onclick = null; app.onchange = null;
+    app.onclick = null; app.onchange = null; app.oninput = null;
     document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('on', h.startsWith(a.dataset.r) || (a.dataset.r === 'oggi' && (h === '' || h.startsWith('data-')))));
     app.setAttribute('aria-busy', 'true');
     try {
@@ -648,7 +649,7 @@
       else if (h === 'fonti') sources();
       else if (h === 'metodo') method();
       else if (h === 'installa') installHelp();
-      else if ((mm = h.match(/^consigli(?:-(giocatori|schedina))?$/))) await Consigli.view(app, mm[1] || 'squadre');
+      else if ((mm = h.match(/^consigli(?:-(giocatori|schedina|quote))?$/))) await Consigli.view(app, mm[1] || 'squadre');
       else notFound();
       if (!/^partita-/.test(h)) document.title = 'Calcio in chiaro';
     } catch (e) {
@@ -660,7 +661,9 @@
 
   async function start() {
     try { await C.meta(); } catch (e) { app.innerHTML = band(`<h1>Dati non disponibili</h1><p class="warn">Impossibile leggere i dati dell'app (${esc(e.message)}).</p>`); return; }
-    const m = C.S.meta; const late = m.avvisi.some(a => a.livello === 'ritardo'); const src = m.avvisi.some(a => a.livello === 'fonte');
+    const m = C.S.meta;
+    // versione dell'app pubblicata piu' nuova di quella aperta: si ricarica una volta
+    try { if (m.versione_app && m.versione_app !== C.APP_VERSION && sessionStorage.getItem('calcio-upd') !== m.versione_app) { sessionStorage.setItem('calcio-upd', m.versione_app); location.reload(); return; } } catch (e) { /* storage non disponibile */ } const late = m.avvisi.some(a => a.livello === 'ritardo'); const src = m.avvisi.some(a => a.livello === 'fonte');
     const s = document.getElementById('status');
     s.innerHTML = `<a href="#fonti" class="${late || src ? 'late' : 'fresh'}"><i></i>Aggiornato ${m.ultimo_aggiornamento_riuscito ? C.dtime(m.ultimo_aggiornamento_riuscito) : '—'}${late ? ' · dati in ritardo' : src ? ' · una fonte non risponde' : ''}</a>`;
     window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
