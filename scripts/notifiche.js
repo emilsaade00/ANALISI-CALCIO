@@ -34,13 +34,14 @@ const unesc = s => String(s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').
 
 async function send(n) {
   const txt = `${n.title}\n${n.message}`;
-  if (!TOPIC) { console.log('NTFY_TOPIC non impostato, notifica non inviata:\n' + txt); return; }
-  if (DRY) { console.log('[prova] ' + txt); return; }
+  if (!TOPIC) { console.log('NTFY_TOPIC non impostato, notifica non inviata:\n' + txt); return false; }
+  if (DRY) { console.log('[prova] ' + txt); return false; }
   try {
     const r = await realFetch('https://ntfy.sh/', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ topic: TOPIC, title: n.title, message: n.message, click: n.click, tags: n.tags || ['soccer'], priority: n.priority || 3 }) });
     console.log(`notifica inviata (${r.status}): ${n.title}`);
-  } catch (e) { console.log('notifica non inviata: ' + e.message); }
+    return r.ok;
+  } catch (e) { console.log('notifica non inviata: ' + e.message); return false; }
 }
 const line = t => `• ${unesc(t.H)} – ${unesc(t.A)} ${C.hm(t.m.ko)} · ${t.kind === 'giocatore' ? unesc(t.name) + ': ' + t.mk.toLowerCase() : t.mk} · fiducia ${pc(t.fid)} · quota giusta ${nf(1 / t.fid, 2)} (errore se sopra ${nf(1.1 / t.fid, 2)})`;
 
@@ -65,22 +66,26 @@ async function calibrate() {
 async function morning(state) {
   const today = C.dayKey(Date.now());
   if (state.mattina === today) return;
+  const romeH = +new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', hourCycle: 'h23' }).format(new Date());
+  if (romeH < 7 || romeH >= 22) return; // niente notifiche di notte
   Consigli.setUi({ lg: 'tutti', per: 'oggi', minF: 0.75, band: '', mk: 'tutti', rel: 'media', pstat: 'tutte', pOff: false, raw: false, only: null, conPl: false, n: 4, target: '' });
   const r = await Consigli.compute('quote');
-  state.mattina = today;
-  if (!r.nMatch) { console.log('nessuna partita oggi: nessuna notifica del mattino'); return; }
+  if (!r.nMatch) { state.mattina = today; console.log('nessuna partita oggi: nessuna notifica del mattino'); return; }
   // nelle notifiche niente eventi quasi certi (quota giusta sotto 1,15): poco utili da giocare
   const useful = t => 1 / t.fid >= 1.15;
   const seen = new Set(), team = [];
   r.team.filter(useful).sort((a, b) => b.fid - a.fid).forEach(t => { if (!seen.has(t.m.i) && team.length < 6) { seen.add(t.m.i); team.push(t); } });
   const pl = r.pl.filter(useful).sort((a, b) => b.fid - a.fid).slice(0, 4);
-  Consigli.setUi({ target: '2' }); const slip = Consigli.schedina(r.team); Consigli.setUi({ target: '' });
+  // schedina verso quota 2 cercata tra tutte le giocate almeno al 50%, come nella scheda Schedina dell'app
+  Consigli.setUi({ minF: 0.5, target: '2' }); const all = await Consigli.compute('quote');
+  const slip = Consigli.schedina(all.team); Consigli.setUi({ minF: 0.75, target: '' });
   const F = slip.reduce((a, t) => a * t.fid, 1);
   const msg = [`${r.nMatch} partite oggi. Le scommesse più solide:`, ...team.map(line)];
   if (pl.length) msg.push('', 'Giocatori (titolari probabili):', ...pl.map(line));
-  if (slip.length) msg.push('', `Schedina a quota 2 (${slip.length} selezioni, riesce il ${pc(F)} delle volte):`, ...slip.map(line));
+  if (slip.length) msg.push('', 1 / F >= 1.9 ? `Schedina a quota ${nf(1 / F, 2)} (${slip.length} selezioni, riesce il ${pc(F)} delle volte):`
+    : `Schedina più alta possibile oggi: quota ${nf(1 / F, 2)} (${slip.length} selezioni, riesce il ${pc(F)} delle volte):`, ...slip.map(line));
   msg.push('', 'Se su bet365 o Sisal trovi una quota sopra la soglia "errore", scrivila nell\'app (Errori di quota).');
-  await send({ title: `Scommesse di oggi (${C.dshort(new Date().toISOString())})`, message: msg.join('\n'), click: SITE + '#consigli', tags: ['soccer', 'chart_with_upwards_trend'] });
+  if (await send({ title: `Scommesse di oggi (${C.dshort(new Date().toISOString())})`, message: msg.join('\n'), click: SITE + '#consigli', tags: ['soccer', 'chart_with_upwards_trend'] })) state.mattina = today;
 }
 
 async function lineups(state) {
@@ -102,8 +107,7 @@ async function lineups(state) {
       if (team.length) msg.push('Partita:', ...team.map(line));
       if (pl.length) msg.push('Titolari:', ...pl.map(line));
       if (!team.length && !pl.length) msg.push('Nessuna scommessa sopra il 70% di fiducia per questa partita.');
-      await send({ title: `${H} – ${A} · ore ${C.hm(m.ko)}`, message: msg.join('\n'), click: SITE + '#partita-' + m.i + '--giocatori', tags: ['soccer', 'clipboard'] });
-      state.formazioni[m.i] = now;
+      if (await send({ title: `${H} – ${A} · ore ${C.hm(m.ko)}`, message: msg.join('\n'), click: SITE + '#partita-' + m.i + '--giocatori', tags: ['soccer', 'clipboard'] })) state.formazioni[m.i] = now;
     }
   }
   for (const k of Object.keys(state.formazioni)) if (now - state.formazioni[k] > 4 * 864e5) delete state.formazioni[k];
@@ -117,7 +121,7 @@ async function lineups(state) {
   } catch (e) { console.log('calibrazione non riuscita: ' + e.message); }
   if (fs.existsSync(CAL_DB)) { fs.copyFileSync(CAL_DB, CAL_WEB); Consigli.reloadCal(); } // la calibrazione viaggia con i dati pubblicati
   try {
-    if (mode === 'completo') await morning(state);
+    if (mode === 'completo' || TOPIC) await morning(state);
     await lineups(state);
   } catch (e) { console.log('notifiche non riuscite: ' + e.message); }
   fs.mkdirSync(DB, { recursive: true }); fs.writeFileSync(STATE_F, JSON.stringify(state));

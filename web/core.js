@@ -281,7 +281,7 @@
   const matchUrl = (m, tab) => '#partita-' + m.i + (tab ? '--' + tab : '');
   const teamUrl = id => '#squadra-' + id;
 
-  const APP_VERSION = '2026-11-28.5';
+  const APP_VERSION = '2026-11-28.6';
   window.C = { APP_VERSION, S, NA, TZ, esc, nf, pc, scode, sfrom, dfmt, dayKey, hm, dlong, dshort, dnum, dtime, getJSON, meta, evalData,
     leagueInfo, LGN, season, preds, players, prevSeason, teamName, played, res, val, agg, show, cellVal, teamMatches,
     leagueList, standings, metricByCode, formChips, matchUrl, teamUrl, pAgg, pVal, pShow, pMetricMeta, pMissing, pPick, pAvail, pLast, pShowL };

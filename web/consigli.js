@@ -229,15 +229,31 @@
     const target = +ui.target || 0;
     const greedy = list => { const used = new Set(), pick = []; for (const t of list) { if (used.has(t.m.i)) continue; pick.push(t); used.add(t.m.i); if (pick.length >= 8) break; } return pick; };
     if (!target) return greedy(pool);
-    // quota obiettivo: il minor numero di selezioni (ognuna almeno al 50%) che arriva alla quota; a parita' di quota
-    // la probabilita' e' la stessa, ma meno selezioni vuol dire meno errori del modello che si sommano
-    for (let n = 1; n <= 10; n++) {
-      const qn = Math.pow(target, 1 / n); const used = new Set(), pick = [];
-      for (const t of pool.filter(z => 1 / z.fid >= qn * 0.93).sort((a, b) => b.fid - a.fid)) { if (used.has(t.m.i)) continue; pick.push(t); used.add(t.m.i); if (pick.length === n) break; }
-      if (pick.length === n && pick.reduce((a, z) => a / z.fid, 1) >= target * 0.97) return pick;
+    // quota obiettivo: il minor numero di selezioni (ognuna almeno al 50%) che arriva alla quota. Per definizione la probabilita'
+    // della schedina e' 1/quota giusta, quindi conta non sforare troppo la quota e usare poche selezioni (meno errori del modello)
+    const byM = new Map(); for (const t of pool) { if (!byM.has(t.m.i)) byM.set(t.m.i, []); byM.get(t.m.i).push(t); } // ogni lista: dalla piu' sicura
+    const Q = p => p.reduce((a, z) => a / z.fid, 1);
+    const upgrade = start => { // alza la quota col passo piu' piccolo possibile finche' si arriva all'obiettivo
+      const pick = start.slice();
+      for (let it = 0; it < 80 && Q(pick) < target * 0.97; it++) {
+        let bi = -1, bz = null, step = Infinity;
+        pick.forEach((t, i) => { const z = byM.get(t.m.i).find(o => o.fid < t.fid - 1e-9); if (z && t.fid / z.fid < step) { step = t.fid / z.fid; bi = i; bz = z; } });
+        if (bi < 0) break; pick[bi] = bz;
+      }
+      return pick;
+    };
+    for (let n = 1; n <= Math.min(10, byM.size); n++) {
+      const qn = Math.pow(target, 1 / n);
+      const first = [...byM.values()].map(L => L.find(z => 1 / z.fid >= qn * 0.93)).filter(Boolean).sort((a, b) => b.fid - a.fid).slice(0, n);
+      if (first.length < n) continue;
+      const pick = upgrade(first), q = Q(pick);
+      if (q >= target * 0.97 && q <= target * 1.3) return pick;
     }
-    const used = new Set(), pick = [];
-    for (const t of pool) { if (used.has(t.m.i)) continue; pick.push(t); used.add(t.m.i); if (pick.reduce((a, z) => a / z.fid, 1) >= target || pick.length >= 12) break; }
+    // obiettivo troppo alto (o troppo preciso) per le partite scelte: tutte le partite, dalla giocata piu' sicura, alzate a piccoli passi
+    const tops = [...byM.values()].map(L => L[0]).sort((a, b) => b.fid - a.fid);
+    let pick = [];
+    for (const t of tops) { pick.push(t); if (Q(pick) >= target * 0.97 || pick.length >= 12) break; }
+    if (Q(pick) < target * 0.97) pick = upgrade(tops.slice(0, 12));
     return pick;
   }
 
@@ -303,7 +319,7 @@
     const target = +ui.target || 0;
     const sel = target ? pick : pick.slice(0, ui.n);
     const F = sel.reduce((a, t) => a * t.fid, 1);
-    const reached = !target || 1 / F >= target;
+    const reached = !target || 1 / F >= target * 0.97;
     let cum = 1; const curve = pick.map((t, i) => { cum *= t.fid; return [i + 1, cum]; });
     return `${target && !reached ? `<p class="warn">Con le partite e i filtri scelti non si arriva a quota ${nf(target, 2)}: qui sotto la migliore combinazione possibile.</p>` : ''}
       <div class="kpis"><div class="kpi hi"><b>${pc(F, 1)}</b><span>probabilità che vadano tutte bene, secondo tutti i dati</span><i>circa 1 volta ogni ${nf(1 / F, 1)}</i></div>
