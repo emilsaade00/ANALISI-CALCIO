@@ -1,0 +1,33 @@
+name: Verifica dati (temporaneo)
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  verifica:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache/restore@v4
+        with:
+          path: db
+          key: calcio-db-${{ github.run_id }}
+          restore-keys: calcio-db-
+      - name: Esporta e pubblica i dati su un ramo temporaneo
+        run: |
+          pip install -q -r requirements.txt
+          python -m pipeline.run --offline --trigger verifica
+          git config user.name "verifica"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp -r web/data /tmp/dati
+          git checkout --orphan verifica-dati
+          git rm -rq --cached .
+          rm -rf ./*
+          cp -r /tmp/dati ./data
+          git add -f data
+          git commit -qm "dati per verifica"
+          git push -qf origin verifica-dati
