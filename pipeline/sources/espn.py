@@ -199,11 +199,10 @@ def _apply(con, cnt, resolver, league, season, eid, c, log, unknown, stats):
         return True
     lega = {}
     if league == "sa":
-        for r in con.execute("SELECT s.player_id, s.team_id, p.name, "
-                             "(SELECT value FROM player_match_stat j WHERE j.match_id=s.match_id AND j.player_id=s.player_id AND j.metric='_maglia') AS maglia "
-                             "FROM player_match_stat s JOIN player p ON p.id=s.player_id "
+        mg = {r[0]: r[1] for r in con.execute("SELECT player_id, value FROM player_match_stat WHERE match_id=? AND metric='_maglia'", (mid,))}
+        for r in con.execute("SELECT s.player_id, s.team_id, p.name FROM player_match_stat s JOIN player p ON p.id=s.player_id "
                              "WHERE s.match_id=? AND s.metric='minuti' AND s.source='legaseriea' AND s.value>0", (mid,)):
-            lega.setdefault(r["team_id"], []).append(r)
+            lega.setdefault(r["team_id"], []).append({"player_id": r["player_id"], "team_id": r["team_id"], "name": r["name"], "maglia": mg.get(r["player_id"])})
     if lega:
         # report ufficiale presente: via eventuali righe ESPN provvisorie e abbinamento ai giocatori della Lega
         con.execute("DELETE FROM player_match_stat WHERE match_id=? AND source='espn' AND player_id LIKE 'espn-%'", (mid,))
@@ -235,6 +234,8 @@ def _apply(con, cnt, resolver, league, season, eid, c, log, unknown, stats):
             pid = scored[0][1]
             con.execute("INSERT OR REPLACE INTO player_map(source, ext_id, player_id) VALUES('espn',?,?)", (p["id"], pid))
             known[p["id"]] = pid
+            if "map" in _CACHE:
+                _CACHE["map"][p["id"]] = pid
             _vote(stats, pid, p["pos"])
             vals = {k: v for k, v in vals.items() if k in SA_EXTRA}
         else:
@@ -284,13 +285,20 @@ def _result(con, cnt, resolver, league, season, e):
                     hthg=int(hh) if hh is not None else None, htag=int(ha) if ha is not None else None)
 
 
+_CACHE = {}
+
+
 def _candidates(con, tid, sources):
-    q = ",".join("?" * len(sources))
-    out = []
-    for r in con.execute(f"SELECT p.id, p.name, (SELECT value FROM player_match_stat j WHERE j.player_id=p.id AND j.metric='_maglia' "
-                         f"ORDER BY j.match_id DESC LIMIT 1) AS maglia FROM player p WHERE p.team_id=? AND p.source IN ({q})", (tid, *sources)):
-        out.append(r)
-    return out
+    """Giocatori della squadra da un'altra fonte, con l'ultimo numero di maglia noto (una sola lettura per esecuzione)."""
+    if "maglie" not in _CACHE:
+        _CACHE["maglie"] = {r[0]: r[1] for r in con.execute(
+            "SELECT player_id, value FROM player_match_stat WHERE metric='_maglia' ORDER BY match_id")}
+    key = (tid, sources)
+    if key not in _CACHE:
+        q = ",".join("?" * len(sources))
+        _CACHE[key] = [{"id": r[0], "name": r[1], "maglia": _CACHE["maglie"].get(r[0])}
+                       for r in con.execute(f"SELECT id, name FROM player WHERE team_id=? AND source IN ({q})", (tid, *sources))]
+    return _CACHE[key]
 
 
 def lineups(con, cnt, resolver, league, season, c, log, played=False):
@@ -306,7 +314,9 @@ def lineups(con, cnt, resolver, league, season, c, log, played=False):
     pls = [p for p in c["players"] if p["side"] in tids and p.get("id")]
     if sum(1 for p in pls if p["starter"]) < 18:  # formazione non ancora pubblicata
         return 0
-    known = {r["ext_id"]: r["player_id"] for r in con.execute("SELECT ext_id, player_id FROM player_map WHERE source='espn'")}
+    if "map" not in _CACHE:
+        _CACHE["map"] = {r["ext_id"]: r["player_id"] for r in con.execute("SELECT ext_id, player_id FROM player_map WHERE source='espn'")}
+    known = _CACHE["map"]
     src = {"sa": ("legaseriea",), "pl": ("fplcore",)}.get(league, ())
     cands = {tid: _candidates(con, tid, src) for tid in tids.values()} if src else {}
     rows = []
@@ -323,6 +333,7 @@ def lineups(con, cnt, resolver, league, season, c, log, played=False):
             sc.sort(reverse=True)
             if sc and sc[0][0] >= 2 and (len(sc) == 1 or sc[1][0] < sc[0][0]):
                 pid = sc[0][1]
+                known[p["id"]] = pid
                 con.execute("INSERT OR REPLACE INTO player_map(source, ext_id, player_id) VALUES('espn',?,?)", (p["id"], pid))
         if not pid:
             pid = f"espn-{p['id']}"
@@ -342,6 +353,7 @@ def lineups(con, cnt, resolver, league, season, c, log, played=False):
 def fetch(con, cnt, resolver, league, season, log):
     if season != config.CURRENT_SEASON or league not in CODES:
         return 0
+    _CACHE.clear()
     code = CODES[league]
     now = datetime.now(timezone.utc)
     today = now.date().isoformat()
