@@ -57,7 +57,7 @@ for _k in ("D", "DF", "CD", "CB", "LB", "RB", "WB", "LWB", "RWB", "SW", "LCB", "
     ROLE[_k] = "Difensore"
 for _k in ("M", "MF", "DM", "CM", "AM", "LM", "RM", "CDM", "CAM", "LCM", "RCM", "LDM", "RDM", "LAM", "RAM"):
     ROLE[_k] = "Centrocampista"
-for _k in ("F", "FW", "CF", "ST", "S", "LW", "RW", "W", "SS", "LF", "RF", "A"):
+for _k in ("F", "FW", "CF", "ST", "S", "LW", "RW", "W", "SS", "LF", "RF", "A", "RCF", "LCF"):
     ROLE[_k] = "Attaccante"
 
 
