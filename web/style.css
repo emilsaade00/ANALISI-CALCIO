@@ -209,3 +209,10 @@ pre,.scroll{overflow-x:auto}.scroll a{flex:none}
 .btn-install[hidden]{display:none}
 td.hl{background:rgba(245,197,24,.16);font-weight:700}
 .topr{margin-left:auto}
+
+.seg a.segbtn{font:inherit;font-size:15px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:8px 14px;min-height:44px;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap}
+.seg a.segbtn.on{background:var(--pitch);color:#fff;border-color:var(--pitch)}
+.sel.chk{flex-direction:row;align-items:center;gap:8px;font-size:15px;color:var(--ink);min-height:44px;align-self:flex-end}
+.sel.chk input{width:22px;height:22px}
+table.tips td{vertical-align:top}
+table.tips b.big{font-size:20px}

@@ -648,6 +648,7 @@
       else if (h === 'fonti') sources();
       else if (h === 'metodo') method();
       else if (h === 'installa') installHelp();
+      else if ((mm = h.match(/^consigli(?:-(giocatori|schedina))?$/))) await Consigli.view(app, mm[1] || 'squadre');
       else notFound();
       if (!/^partita-/.test(h)) document.title = 'Calcio in chiaro';
     } catch (e) {

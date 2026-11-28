@@ -169,3 +169,26 @@ legaseriea.fetch(con3, c4, R3, "sa", "2026-27", lambda m: None); espn.fetch(con3
 ps2 = {(r["player_id"], r["metric"]): (r["value"], r["source"]) for r in con3.execute("SELECT * FROM player_match_stat WHERE match_id='sa-2627-inter-como'")}
 assert ps2 == ps, set(ps2.items()) ^ set(ps.items())
 print("ESPN OK")
+
+# ESPN: formazioni ufficiali prima della gara e risultati dal calendario
+from datetime import datetime, timedelta, timezone
+ko = (datetime.now(timezone.utc) + timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%MZ")
+def comp_ev(eid, date_, done, hs=None, as_=None):
+    c = [{"homeAway": "home", "team": {"displayName": "Sevilla"}, "score": hs, "linescores": [{"value": 1}]},
+         {"homeAway": "away", "team": {"displayName": "Valencia"}, "score": as_, "linescores": [{"value": 0}]}]
+    return {"id": eid, "date": date_, "status": {"type": {"completed": done}}, "competitions": [{"competitors": c}]}
+def fake_get2(url):
+    if "scoreboard" in url:
+        return {"events": [comp_ev("700", ko, False), comp_ev("701", "2026-11-01T14:00Z", True, "3", "1")]}
+    roster = lambda side, base: [_pl(str(base + i), f"Giocatore {base + i}", f"G{base + i}", str(i + 1), "CM", i < 11) for i in range(14)]
+    return {"header": {"competitions": [{"date": ko, "competitors": [{"homeAway": "home", "team": {"id": "1", "displayName": "Sevilla"}},
+                                                                    {"homeAway": "away", "team": {"id": "2", "displayName": "Valencia"}}]}]},
+            "rosters": [{"homeAway": "home", "roster": roster("home", 100)}, {"homeAway": "away", "roster": roster("away", 200)}], "keyEvents": []}
+espn._get = fake_get2
+db.upsert_match(con3, c4, league="ll", season="2026-27", home_id="ll-sevilla", away_id="ll-valencia", source="openmatchday", kickoff_utc=ko.replace("Z", ":00Z"))
+c5 = db.Counter(); espn.fetch(con3, c5, R3, "ll", "2026-27", lambda m: None)
+lu = con3.execute("SELECT status, COUNT(*) n FROM lineup WHERE match_id='ll-2627-sevilla-valencia' GROUP BY status").fetchall()
+assert {r["status"]: r["n"] for r in lu} == {"titolare": 22, "panchina": 6}, [dict(r) for r in lu]
+r = con3.execute("SELECT fthg, ftag, hthg, status FROM match WHERE id='ll-2627-sevilla-valencia'").fetchone()
+assert (r["fthg"], r["ftag"], r["hthg"], r["status"]) == (3, 1, 1, "FINISHED"), dict(r)
+print("ESPN formazioni e risultati OK")

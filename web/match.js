@@ -539,11 +539,16 @@
       const off = grp('ufficiale', 'titolare'), bench = grp('ufficiale', 'panchina'), inj = grp('indisponibili');
       const upd = mine.length ? mine.map(r => r[5]).sort().pop() : null;
       const played = (x.pl.byMatch[x.m.i] || []).filter(r => r.tid === tid && r.v.titolare);
+      // formazione tipo: i titolari piu' frequenti nelle ultime 5 partite della squadra (stima, non ufficiale)
+      const past = x.d.matches.filter(z => z.g && z.t < x.m.t && (z.h === tid || z.a === tid) && x.pl.byMatch[z.i]).sort((a, b) => b.t - a.t).slice(0, 5);
+      const cnt = {}, mins = {};
+      past.forEach(z => x.pl.byMatch[z.i].forEach(r => { if (r.tid === tid && r.v.minuti) { mins[r.pid] = (mins[r.pid] || 0) + r.v.minuti; if (r.v.titolare) cnt[r.pid] = (cnt[r.pid] || 0) + 1; } }));
+      const tipo = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || mins[b] - mins[a]).slice(0, 11);
       return `<div class="tcard"><h3>${esc(name)}</h3>
-        <p><b>Formazione ufficiale:</b> ${off.length ? off.map(r => pn(r[0])).join(', ') : played.length ? played.map(r => pn(r.pid)).join(', ') + ' <span class="sub">(titolari a referto)</span>' : '<span class="miss">non ancora pubblicata</span>'}</p>
+        <p><b>Formazione ufficiale:</b> ${off.length ? off.map(r => pn(r[0])).join(', ') : played.length ? played.map(r => pn(r.pid)).join(', ') + ' <span class="sub">(titolari a referto)</span>' : '<span class="miss">non ancora pubblicata</span> <span class="sub">(di solito esce un\'ora prima del via: l\'app controlla ogni 30 minuti)</span>'}</p>
         ${bench.length ? `<p class="sub">Panchina: ${bench.map(r => pn(r[0])).join(', ')}</p>` : ''}
-        <p><b>Probabile formazione:</b> <span class="nd">non fornita dalle fonti attive</span></p>
-        <p><b>Indisponibili:</b> ${inj.length ? inj.map(r => pn(r[0]) + (r[4] ? ` <span class="sub">(${esc(r[4])})</span>` : '')).join(', ') : '<span class="nd">non forniti dalle fonti attive</span>'}</p>
+        ${!off.length && !played.length ? `<p><b>Formazione tipo:</b> ${past.length >= 2 && tipo.length ? tipo.map(p => `${pn(p)} <span class="sub">${cnt[p]}/${past.length}</span>`).join(', ') : '<span class="nd">dati insufficienti</span>'}<br><span class="sub">Titolari più frequenti nelle ultime ${past.length} partite: è una stima, non la formazione ufficiale.</span></p>` : ''}
+        <p><b>Indisponibili:</b> ${inj.length ? inj.map(r => pn(r[0]) + (r[4] ? ` <span class="sub">(${esc(r[4])})</span>` : '')).join(', ') : '<span class="nd">nessuna fonte gratuita pubblica infortunati e squalificati</span>'}</p>
         <p class="sub">Fonte: ${esc(x.pl.fonte)}${upd ? ' · aggiornato ' + C.dtime(upd) : ''}</p></div>`;
     };
     const M = C.pMetricMeta(x.pl); const metric = C.pPick(x.pl, ui.mpMetric, 'tiri_porta'); const mm = M.find(z => z.code === metric);
@@ -653,5 +658,5 @@
       if (e.target.id === 'rp-metric') { ui.rpMetric = e.target.value; render(); }
     };
   }
-  window.MatchView = { view, refStats, refTable };
+  window.MatchView = { view, refStats, refTable, evLabel, FAMN };
 })();

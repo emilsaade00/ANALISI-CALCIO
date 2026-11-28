@@ -60,7 +60,7 @@ SOURCES_ENABLED = [s.strip() for s in os.environ.get(
 
 MODEL_VERSION = "1.1.0"
 SCHEDULE_NOTE = os.environ.get("CALCIO_SCHEDULE_NOTE",
-                               "Ogni giorno alle 06:15 UTC (07:15 ora italiana in inverno, 08:15 in estate) tramite GitHub Actions, anche ad app chiusa.")
+                               "Completo ogni mattina alle 06:15 UTC (07:15 ora italiana in inverno); ogni 30 minuti risultati appena conclusi e formazioni ufficiali. Tramite GitHub Actions, anche ad app chiusa.")
 
 # Parametri di default del modello (sovrascritti dalla taratura, se eseguita).
 MODEL_DEFAULTS = {

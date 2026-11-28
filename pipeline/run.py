@@ -16,6 +16,7 @@ from .sources import fdcouk, openfootball, fdorg, apifootball, openmatchday, fpl
 from .sources.common import SourceError
 from . import predict, evaluate, export
 
+RAPID_SOURCES = {"espn"}  # risultati appena conclusi e formazioni ufficiali, ogni 30 minuti
 SOURCES = {
     "openfootball": (openfootball.INFO, openfootball.fetch),
     "fdcouk": (fdcouk.INFO, fdcouk.fetch),
@@ -67,9 +68,11 @@ def seasons_for(sid, con, lg, failed):
     return [cur]
 
 
-def fetch_all(con, resolver, run_id):
+def fetch_all(con, resolver, run_id, rapido=False):
     failed = set()
     for sid, (info, fn) in SOURCES.items():
+        if rapido and sid not in RAPID_SOURCES:
+            continue  # aggiornamento rapido: le altre fonti restano quelle della mattina
         started = db.now_iso()
         cnt = db.Counter()
         if sid not in config.SOURCES_ENABLED:
@@ -127,7 +130,10 @@ def main(argv=None):
     ap.add_argument("--trigger", default="manuale")
     ap.add_argument("--nota", default=None, help="nota sull'ambiente da mostrare nell'app")
     ap.add_argument("--pianificazione", default=None, help="descrizione dell'aggiornamento automatico")
+    ap.add_argument("--rapido", action="store_true", help="solo risultati recenti e formazioni ufficiali (ogni 30 minuti)")
     a = ap.parse_args(argv)
+    if a.rapido:
+        espn.RAPIDO = True
     con = db.connect(config.DB_PATH)
     for sid, (info, _) in SOURCES.items():
         con.execute("INSERT OR REPLACE INTO source(id,name,url,license,needs_key,key_env,provides,notes) VALUES(?,?,?,?,?,?,?,?)",
@@ -144,7 +150,7 @@ def main(argv=None):
     resolver = TeamResolver()
     try:
         predict.archive_import(con, log)
-        failed = set() if a.offline else fetch_all(con, resolver, run_id)
+        failed = set() if a.offline else fetch_all(con, resolver, run_id, rapido=a.rapido)
         params = db.kv_get(con, "params")
         if a.tune or not params:
             chosen = predict.tune(con, log)
@@ -161,7 +167,7 @@ def main(argv=None):
             status, msg = "ricalcolo", "solo ricalcolo, nessuna fonte interrogata"
         else:
             status = "parziale" if failed else "ok"
-            msg = ("fonti non riuscite: " + ", ".join(sorted(failed))) if failed else "completato"
+            msg = ("fonti non riuscite: " + ", ".join(sorted(failed))) if failed else ("rapido: risultati e formazioni" if a.rapido else "completato")
         con.execute("UPDATE update_run SET finished_at=?, status=?, message=? WHERE id=?",
                     (db.now_iso(), status, msg, run_id))
         con.commit()

@@ -1,8 +1,14 @@
 name: Aggiornamento quotidiano
 on:
   schedule:
-    - cron: "15 6 * * *"
+    - cron: "15 6 * * *"      # aggiornamento completo
+    - cron: "7,37 * * * *"    # ogni 30 minuti: risultati e formazioni ufficiali
   workflow_dispatch:
+    inputs:
+      rapido:
+        description: "Solo risultati recenti e formazioni (aggiornamento rapido)"
+        type: boolean
+        default: false
 permissions:
   contents: write
   pages: write
@@ -42,6 +48,7 @@ jobs:
         env:
           FOOTBALL_DATA_ORG_KEY: ${{ secrets.FOOTBALL_DATA_ORG_KEY }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          RAPIDO: ${{ (github.event.schedule == '7,37 * * * *' || inputs.rapido) && '1' || '' }}
         run: bash scripts/aggiorna.sh
       - uses: actions/cache/save@v4
         if: always()

@@ -19,7 +19,7 @@ import re
 import time
 import unicodedata
 from collections import Counter
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 from .. import config, db
 from .common import http_get, SourceError
@@ -38,6 +38,10 @@ BASE = os.environ.get("CALCIO_ESPN_BASE", "https://site.api.espn.com/apis/site/v
 CODES = {"sa": "ita.1", "pl": "eng.1", "bl": "ger.1", "ll": "esp.1"}
 PAUSE = float(os.environ.get("CALCIO_ESPN_PAUSE", "0.25"))
 REFRESH_DAYS = 3  # le partite degli ultimi giorni si rileggono: ESPN corregge le statistiche dopo la gara
+# Aggiornamento rapido (ogni 30 minuti): solo risultati di ieri/oggi, partite appena concluse e formazioni ufficiali
+RAPIDO = os.environ.get("CALCIO_RAPIDO") == "1"
+LINEUP_AHEAD_MIN = 150   # formazioni: partite che iniziano entro 2 ore e mezza
+LINEUP_BEHIND_MIN = 30   # ... o iniziate da meno di mezz'ora
 
 TEAM = {"foulsCommitted": "falli", "yellowCards": "gialli", "redCards": "rossi", "offsides": "fuorigioco",
         "wonCorners": "corner", "saves": "parate", "possessionPct": "possesso", "totalShots": "tiri",
@@ -247,29 +251,131 @@ def _apply(con, cnt, resolver, league, season, eid, c, log, unknown, stats):
     return True
 
 
+def _utc(s):
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _result(con, cnt, resolver, league, season, e):
+    """Risultato finale (e del primo tempo) dal calendario ESPN, solo per partite gia' presenti."""
+    comp = (e.get("competitions") or [{}])[0]
+    side = {c.get("homeAway"): c for c in comp.get("competitors") or []}
+    if "home" not in side or "away" not in side:
+        return
+    h = resolver.resolve(league, side["home"]["team"].get("displayName", ""), "espn", allow_new=False)
+    a = resolver.resolve(league, side["away"]["team"].get("displayName", ""), "espn", allow_new=False)
+    if not h or not a or not con.execute("SELECT 1 FROM match WHERE id=?", (db.match_id(league, season, h, a),)).fetchone():
+        return
+    try:
+        fh, fa = int(side["home"]["score"]), int(side["away"]["score"])
+    except (KeyError, TypeError, ValueError):
+        return
+    ls = lambda c: (c.get("linescores") or [{}])[0].get("value")
+    hh, ha = ls(side["home"]), ls(side["away"])
+    db.upsert_match(con, cnt, league=league, season=season, home_id=h, away_id=a, source="espn", fthg=fh, ftag=fa,
+                    hthg=int(hh) if hh is not None else None, htag=int(ha) if ha is not None else None)
+
+
+def _candidates(con, tid, sources):
+    q = ",".join("?" * len(sources))
+    out = []
+    for r in con.execute(f"SELECT p.id, p.name, (SELECT value FROM player_match_stat j WHERE j.player_id=p.id AND j.metric='_maglia' "
+                         f"ORDER BY j.match_id DESC LIMIT 1) AS maglia FROM player p WHERE p.team_id=? AND p.source IN ({q})", (tid, *sources)):
+        out.append(r)
+    return out
+
+
+def lineups(con, cnt, resolver, league, season, c, log):
+    """Formazioni ufficiali (titolari e panchina) pubblicate da ESPN prima del calcio d'inizio."""
+    h = resolver.resolve(league, c["home"] or "", "espn", allow_new=False)
+    a = resolver.resolve(league, c["away"] or "", "espn", allow_new=False)
+    if not h or not a:
+        return 0
+    mid = db.match_id(league, season, h, a)
+    if not con.execute("SELECT 1 FROM match WHERE id=?", (mid,)).fetchone():
+        return 0
+    tids = {"home": h, "away": a}
+    pls = [p for p in c["players"] if p["side"] in tids and p.get("id")]
+    if sum(1 for p in pls if p["starter"]) < 18:  # formazione non ancora pubblicata
+        return 0
+    known = {r["ext_id"]: r["player_id"] for r in con.execute("SELECT ext_id, player_id FROM player_map WHERE source='espn'")}
+    src = {"sa": ("legaseriea",), "pl": ("fplcore",)}.get(league, ())
+    cands = {tid: _candidates(con, tid, src) for tid in tids.values()} if src else {}
+    rows = []
+    for p in pls:
+        tid = tids[p["side"]]
+        pid = known.get(p["id"])
+        if not pid and src:
+            sc = []
+            for r in cands.get(tid, []):
+                s_ = name_score(r["name"], p)
+                if r["maglia"] is not None and p.get("jersey") and str(int(r["maglia"])) == str(p["jersey"]).strip():
+                    s_ += 2
+                sc.append((s_, r["id"]))
+            sc.sort(reverse=True)
+            if sc and sc[0][0] >= 2 and (len(sc) == 1 or sc[1][0] < sc[0][0]):
+                pid = sc[0][1]
+                con.execute("INSERT OR REPLACE INTO player_map(source, ext_id, player_id) VALUES('espn',?,?)", (p["id"], pid))
+        if not pid:
+            pid = f"espn-{p['id']}"
+            con.execute("INSERT INTO player(id,name,team_id,position,source) VALUES(?,?,?,?,?) ON CONFLICT(id) DO NOTHING",
+                        (pid, p["name"], tid, _role(p["pos"]), "espn"))
+        rows.append((mid, tid, pid, "titolare" if p["starter"] else "panchina", "ufficiale", "espn", db.now_iso(), None))
+    con.execute("DELETE FROM lineup WHERE match_id=? AND kind='ufficiale' AND source='espn'", (mid,))
+    con.executemany("INSERT OR REPLACE INTO lineup(match_id,team_id,player_id,status,kind,source,updated_at,detail) VALUES(?,?,?,?,?,?,?,?)", rows)
+    cnt.rows_new += len(rows)
+    return 1
+
+
 def fetch(con, cnt, resolver, league, season, log):
     if season != config.CURRENT_SEASON or league not in CODES:
         return 0
     code = CODES[league]
-    today = date.today().isoformat()
-    events = []
-    for ym in _months(season):
+    now = datetime.now(timezone.utc)
+    today = now.date().isoformat()
+    days = [(now + timedelta(days=k)).strftime("%Y%m%d") for k in (-1, 0, 1)]
+    queries = days if RAPIDO else _months(season) + [days[2]]
+    events, upcoming, seen = [], [], set()
+    for q in queries:
         try:
-            sb = _get(f"{BASE}/{code}/scoreboard?dates={ym}")
+            sb = _get(f"{BASE}/{code}/scoreboard?dates={q}")
         except SourceError as e:
             if "HTTP 400" in str(e):
                 continue
             raise
         for e in sb.get("events", []):
-            if ((e.get("status") or {}).get("type") or {}).get("completed"):
+            if e["id"] in seen:
+                continue
+            seen.add(e["id"])
+            st = (e.get("status") or {}).get("type") or {}
+            ko = _utc(e.get("date"))
+            if st.get("completed"):
                 events.append((e["id"], (e.get("date") or "")[:10]))
+                _result(con, cnt, resolver, league, season, e)
+            elif ko and -LINEUP_BEHIND_MIN <= (ko - now).total_seconds() / 60 <= LINEUP_AHEAD_MIN:
+                upcoming.append(e["id"])
     cnt.rows_in += len(events)
+    published = 0
+    for eid in upcoming:
+        try:
+            s = _get(f"{BASE}/{code}/summary?event={eid}")
+        except SourceError as e:
+            log(f"{league}: formazioni partita {eid} non lette ({e})")
+            continue
+        s.pop("odds", None), s.pop("pickcenter", None)
+        published += lineups(con, cnt, resolver, league, season, compact(s), log)
+    if upcoming:
+        log(f"{league}: {len(upcoming)} partite in arrivo, formazioni ufficiali pubblicate per {published}")
     fetched = 0
     for eid, d in events:
         key = f"espn:{league}:{eid}"
         have = db.kv_get(con, key)
         recent = d and (date.fromisoformat(today) - date.fromisoformat(d)).days <= REFRESH_DAYS
-        if have and not recent:
+        if have and (RAPIDO or not recent):
             continue
         try:
             s = _get(f"{BASE}/{code}/summary?event={eid}")
