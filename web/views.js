@@ -577,6 +577,7 @@
         <li><b>football-data.org</b> (gratuita): registrati su football-data.org, ricevi il token via email. Aggiunge calendario ufficiale con orari, rinvii, giornate e arbitri designati per tutti e quattro i campionati.</li>
         <li><b>API-Football</b>: il piano gratuito (100 richieste al giorno) copre solo le stagioni dal 2022 al 2024, quindi non aggiunge nulla alla stagione in corso. Con un piano a pagamento aggiunge contrasti, dribbling e duelli per ogni giocatore, formazioni ufficiali e indisponibili. Chiave su dashboard.api-football.com.</li>
         <li>Nel repository GitHub dell'app apri <i>Settings → Secrets and variables → Actions → New repository secret</i> e crea <code>FOOTBALL_DATA_ORG_KEY</code> e <code>API_FOOTBALL_KEY</code>. Le chiavi restano sul server: non finiscono mai nella pagina né nei dati pubblicati.</li>
+        <li><b>Notifiche sul tablet</b> (gratuite): installa l'app <i>ntfy</i> dal Play Store, iscriviti a un argomento con un nome difficile da indovinare e crea il segreto <code>NTFY_TOPIC</code> con lo stesso nome. Ricevi le scommesse del giorno al mattino e l'avviso delle formazioni ufficiali.</li>
         <li>Avvia una volta il workflow <i>Aggiornamento quotidiano</i> dalla scheda Actions (o attendi l'esecuzione del giorno dopo). Lo stato qui sopra diventerà "funzionante".</li></ol>
         <p class="note">Regola permanente: nessuna fonte di quote, probabilità implicite o pronostici dei bookmaker viene usata. Dalle tabelle di football-data.co.uk si importano solo le colonne sportive; gli endpoint di quote e pronostici di API-Football non vengono mai chiamati.</p>`) +
       band(`<h2>Copertura per campionato e stagione</h2><div class="scroll"><table><thead><tr><th>Campionato</th><th>Stagione</th><th class="num">In calendario</th><th class="num">Giocate</th><th class="num">Con tiri e corner</th><th class="num">Con 1° tempo</th><th class="num">Con arbitro</th></tr></thead><tbody>${m.campionati.flatMap(l => l.seasons.map(s => {
@@ -649,7 +650,7 @@
       else if (h === 'fonti') sources();
       else if (h === 'metodo') method();
       else if (h === 'installa') installHelp();
-      else if ((mm = h.match(/^consigli(?:-(giocatori|schedina|quote))?$/))) await Consigli.view(app, mm[1] || 'squadre');
+      else if ((mm = h.match(/^consigli(?:-(giocatori|schedina|quote|rendimento|giocate))?$/))) await Consigli.view(app, mm[1] || 'squadre');
       else notFound();
       if (!/^partita-/.test(h)) document.title = 'Calcio in chiaro';
     } catch (e) {

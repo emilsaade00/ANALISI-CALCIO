@@ -32,7 +32,7 @@ sulle quote sono esclusi da raccolta dati, stima, selezione degli indicatori e v
 | open-matchday (GitHub, ogni giorno) | no | Stagione in corso per i 4 campionati: calendario, risultati, primo tempo, tiri, tiri in porta, falli, corner anche per tempo, cartellini, minuti dei gol. Uso non commerciale con attribuzione. I file di quote del repository non vengono mai letti. |
 | FPL-Core-Insights (GitHub, due volte al giorno) | no | Premier League: statistiche avanzate di squadra e di ogni giocatore (xG, grandi occasioni, passaggi, cross, dribbling, contrasti, intercetti, duelli, falli subiti e commessi, cartellini). Origine FotMob e Fantasy Premier League. |
 | Match Report Lega Serie A (serie-a-observatory, GitHub, settimanale) | no | Serie A: statistiche ufficiali di squadra e di ogni giocatore (tiri, tiri in porta, passaggi chiave, recuperi, palloni giocati, falli subiti, cartellini, parate). Non contengono falli commessi, contrasti e dribbling del singolo giocatore. |
-| ESPN (site.api.espn.com, ogni giorno + ogni 30 minuti) | no | Stagione in corso per i 4 campionati. Ogni 30 minuti: risultati appena conclusi e formazioni ufficiali (pubblicate circa un'ora prima del via). Squadra: contrasti effettuati e vinti (quindi persi), intercetti, spazzate, passaggi, cross, lanci lunghi, possesso, falli. Giocatore: falli commessi e subiti, tiri, tiri in porta, gol, assist, fuorigioco, cartellini, titolari; minuti stimati dalle sostituzioni. In Serie A si abbina ai giocatori dei report Lega (maglia e nome) e aggiunge solo falli commessi, fuorigioco e titolari. Interfaccia pubblica non documentata, uso personale; le sezioni con quote della risposta vengono scartate. |
+| ESPN (site.api.espn.com, ogni giorno) | no | Stagione in corso per i 4 campionati. Squadra: contrasti effettuati e vinti (quindi persi), intercetti, spazzate, passaggi, cross, lanci lunghi, possesso, falli. Giocatore: falli commessi e subiti, tiri, tiri in porta, gol, assist, fuorigioco, cartellini, titolari; minuti stimati dalle sostituzioni. In Serie A si abbina ai giocatori dei report Lega (maglia e nome) e aggiunge solo falli commessi, fuorigioco e titolari. Interfaccia pubblica non documentata, uso personale; le sezioni con quote della risposta vengono scartate. |
 | Designazioni AIA (`data/manuale/`) | no | Arbitro di ogni partita di Serie A, trascritto dai comunicati ufficiali con la fonte di ogni riga. Va aggiornato a ogni giornata (una riga per partita) se non si attiva API-Football. |
 | football-data.org | sì, gratuita | Calendario ufficiale con orari, giornate, rinvii, stato partita, arbitri designati. |
 | API-Football | sì; il piano gratuito copre solo le stagioni 2022–2024, per la stagione in corso serve un piano a pagamento | Possesso, passaggi, xG del fornitore, tiri in/fuori area, parate, statistiche giocatore (contrasti, dribbling, duelli), formazioni ufficiali, indisponibili. Gli endpoint `/odds` e `/predictions` non vengono mai chiamati. |
@@ -68,7 +68,7 @@ Servono un account GitHub e circa 10 minuti. È più comodo da computer.
    scaricando tutte le stagioni dalle fonti. Al termine (10–15 minuti) l'indirizzo dell'app compare
    in *Settings → Pages* (di solito `https://<tuo-utente>.github.io/<nome-repository>/`). Aggiungilo alla schermata Home del telefono.
 
-Da quel momento l'aggiornamento parte da solo **ogni giorno alle 06:15 UTC** (completo) e **ogni 30 minuti** (risultati appena conclusi e formazioni ufficiali), anche ad app chiusa: importa nuove partite e
+Da quel momento l'aggiornamento parte da solo **ogni giorno alle 06:15 UTC**, anche ad app chiusa: importa nuove partite e
 risultati, recupera correzioni, ricalcola gli indicatori, salva i pronostici delle partite dei 14 giorni successivi,
 aggiorna la verifica e ripubblica l'app. Se una fonte non risponde, l'aggiornamento prosegue con le altre e l'app lo segnala.
 
@@ -116,12 +116,3 @@ Dettagli nella pagina **Metodo** dell'app e in `pipeline/model.py`.
 - Non disponibili con nessuna delle fonti configurate: grandi occasioni, xA, passaggi progressivi, cross, ingressi
   nell'ultimo terzo, errori che portano al tiro, minuto del primo corner. Compaiono nel catalogo come "n.d.".
 - Sui totali di gol e corner il modello fa poco meglio della media del campionato: la pagina "Quanto è preciso?" lo mostra.
-
-## Consigli del modello
-
-La pagina *Consigli* (`#consigli`) elenca gli eventi più probabili delle prossime partite, per squadre e giocatori, e la
-schedina più probabile. Tutto deriva dalle probabilità del modello: nessuna quota dei bookmaker entra nel calcolo. Per ogni
-consiglio si mostra lo **storico verificato** (quante volte si è avverato lo stesso tipo di evento quando il modello dava una
-probabilità simile) e la **quota equa** (1 ÷ probabilità). I consigli sui giocatori valgono solo per i titolari; lo storico è
-ricalcolato nel browser sulle partite già giocate della stagione con la stessa regola. Gioco vietato ai minori; Telefono Verde
-Nazionale ISS 800 558822.

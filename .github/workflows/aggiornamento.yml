@@ -50,6 +50,12 @@ jobs:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           RAPIDO: ${{ (github.event.schedule == '7,37 * * * *' || inputs.rapido) && '1' || '' }}
         run: bash scripts/aggiorna.sh
+      - name: Calibrazione della fiducia e notifiche
+        continue-on-error: true
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          RAPIDO: ${{ (github.event.schedule == '7,37 * * * *' || inputs.rapido) && '1' || '' }}
+        run: node scripts/notifiche.js ${RAPIDO:+rapido}
       - uses: actions/cache/save@v4
         if: always()
         with:

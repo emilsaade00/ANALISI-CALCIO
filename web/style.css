@@ -241,3 +241,28 @@ td.sigs{min-width:190px}
 input.qin{width:110px;font:inherit;font-size:17px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);min-height:44px}
 .vq{display:block;margin-top:6px;font-size:14px}.vq b{font-size:16px}
 .vq.ok{color:var(--good)}.vq.mid{color:var(--ink)}.vq.ko{color:var(--muted)}
+
+/* ---- scommesse: aspetto professionale ---- */
+.betshead h1{margin-bottom:4px}
+.seg.tabsx{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;padding-bottom:4px;scrollbar-width:thin}
+.seg.tabsx a.segbtn{flex:0 0 auto}
+.meter{display:block;height:6px;border-radius:999px;background:var(--soft);margin:4px 0 2px auto;width:72px;overflow:hidden}
+.meter i{display:block;height:100%;border-radius:999px;background:var(--muted)}
+.meter.l4 i{background:var(--good)}.meter.l3 i{background:color-mix(in srgb,var(--good) 70%,var(--accent))}.meter.l2 i{background:var(--accent)}.meter.l1 i{background:var(--red)}
+b.big.l4{color:var(--good)}
+.mkt{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;padding:2px 7px;border-radius:6px;vertical-align:2px;background:var(--soft);color:var(--muted)}
+.mk-esito{background:#e6eefc;color:#2453a6}.mk-gol{background:#e8f6ee;color:#1d7448}.mk-corner{background:#fdf2d8;color:#8a5a00}
+.mk-tiri{background:#f3e8fb;color:#6b2fa0}.mk-disciplina{background:#fde8e7;color:#a8322a}.mk-giocatore{background:#e5f4f6;color:#16707d}
+@media (prefers-color-scheme: dark){.mk-esito,.mk-gol,.mk-corner,.mk-tiri,.mk-disciplina,.mk-giocatore{background:var(--soft);color:var(--ink)}}
+button.add{font:700 20px/1 Inter,system-ui,sans-serif;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--pitch);cursor:pointer}
+button.add:disabled{background:var(--pitch);color:#fff;border-color:var(--pitch)}
+button.add.del{color:var(--red);font-size:16px}
+.lst{display:inline-block;font-size:12.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--soft);white-space:nowrap}
+.lst-vinta{background:color-mix(in srgb,var(--good) 20%,transparent);color:var(--good)}.lst-persa{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red)}
+.lst-attesa{color:var(--muted)}
+td.pos{color:var(--good);font-weight:600}td.neg{color:var(--red);font-weight:600}
+table.track td div{margin:2px 0}
+details.howto{border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:var(--card);margin-bottom:12px}
+details.howto summary{cursor:pointer;min-height:32px}
+.btn.primary{background:var(--pitch);color:#fff;border-color:var(--pitch)}
+.btn.primary:disabled{opacity:.8}
