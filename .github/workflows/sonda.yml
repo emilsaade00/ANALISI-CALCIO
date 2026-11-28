@@ -8,37 +8,37 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Controlla i campi disponibili
+      - name: Controlla sostituzioni e calendario
         shell: python
         run: |
           import json, urllib.request
           def get(u):
               req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0 (calcio-in-chiaro)"})
               return json.loads(urllib.request.urlopen(req, timeout=30).read())
-          for lg in ["ita.1", "eng.1", "ger.1", "esp.1"]:
-              print("=====", lg)
-              evs = []
-              for d in ["20261108", "20261109", "20261107", "20261101", "20261102", "20261031"]:
-                  try:
-                      sb = get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{lg}/scoreboard?dates={d}")
-                  except Exception as e:
-                      print("scoreboard errore", d, e); continue
-                  evs += [e for e in sb.get("events", []) if e["status"]["type"].get("completed")]
-                  if evs: break
-              print("partite concluse:", len(evs))
-              if not evs: continue
-              ev = evs[-1]; print("evento", ev["id"], ev["name"], ev["date"])
-              s = get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{lg}/summary?event={ev['id']}")
-              print("chiavi:", list(s.keys()))
-              for t in s.get("boxscore", {}).get("teams", []):
-                  print("squadra", t["team"]["displayName"], [(x.get("name"), x.get("displayValue")) for x in t.get("statistics", [])])
-              for r in s.get("rosters", [])[:1]:
-                  ro = r.get("roster", [])
-                  print("giocatori in rosa:", len(ro))
-                  for p in ro[:3]:
-                      print(" ", p.get("athlete", {}).get("displayName"), p.get("position", {}).get("abbreviation"), p.get("starter"), p.get("subbedIn"), p.get("subbedOut"))
-                      print("   stats:", [(x.get("name"), x.get("value")) for x in p.get("stats", [])])
-              ke = s.get("keyEvents") or []
-              print("keyEvents:", len(ke), sorted({k.get("type", {}).get("text") for k in ke if isinstance(k, dict)}))
-              co = s.get("commentary") or []
-              print("commentary:", len(co))
+          sb = get("https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/scoreboard")
+          lg = sb["leagues"][0]
+          print("season", json.dumps(lg.get("season"))[:400])
+          cal = lg.get("calendar") or []
+          print("calendar type", type(cal).__name__, len(cal), json.dumps(cal[:3])[:600], json.dumps(cal[-2:])[:300])
+          for q in ["dates=20260801-20261130", "dates=202611", "dates=20261101-20261110"]:
+              try:
+                  r = get("https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/scoreboard?" + q)
+                  print(q, "->", len(r.get("events", [])))
+              except Exception as e:
+                  print(q, "errore", e)
+          s = get("https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1/summary?event=401875003")
+          print("header comp:", json.dumps(s["header"]["competitions"][0].get("date")), [ (c["team"]["displayName"], c["team"].get("id"), c.get("homeAway"), c.get("score")) for c in s["header"]["competitions"][0]["competitors"]])
+          subs = [k for k in s.get("keyEvents", []) if "Substitution" in (k.get("type", {}).get("text") or "")]
+          print("SUB", json.dumps(subs[0])[:1500])
+          reds = [k for k in s.get("keyEvents", []) if "Red" in (k.get("type", {}).get("text") or "")]
+          print("RED", json.dumps(reds[:1])[:800])
+          for r in s["rosters"]:
+              print("team", r["team"]["displayName"], r["team"].get("id"), r.get("homeAway"))
+              for p in r["roster"]:
+                  if p.get("subbedOut") or p.get("subbedIn"):
+                      q = {k: v for k, v in p.items() if k != "stats"}
+                      print("ROSTER", json.dumps(q)[:1500]); break
+              p = r["roster"][0]
+              print("ATHLETE", json.dumps(p.get("athlete"))[:600])
+              print("keys", list(p.keys()))
+              break
