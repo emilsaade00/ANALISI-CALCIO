@@ -163,6 +163,7 @@ ps = {(r["player_id"], r["metric"]): (r["value"], r["source"]) for r in con3.exe
 assert ps[("lsa-inter-l-martinez", "falli_commessi")] == (2, "espn") and ps[("lsa-inter-l-martinez", "tiri")] == (4, "legaseriea"), ps
 assert ps[("lsa-inter-m-thuram", "minuti")] == (75, "legaseriea") and ps[("lsa-inter-m-thuram", "titolare")][0] == 1
 assert not any(k[0].startswith("espn-") for k in ps)
+assert con3.execute("SELECT position FROM player WHERE id='lsa-inter-l-martinez'").fetchone()[0] == "Attaccante"
 # una seconda esecuzione non cambia nulla e i dati Lega restano
 legaseriea.fetch(con3, c4, R3, "sa", "2026-27", lambda m: None); espn.fetch(con3, c4, R3, "sa", "2026-27", lambda m: None)
 ps2 = {(r["player_id"], r["metric"]): (r["value"], r["source"]) for r in con3.execute("SELECT * FROM player_match_stat WHERE match_id='sa-2627-inter-como'")}

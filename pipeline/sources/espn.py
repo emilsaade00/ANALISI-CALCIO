@@ -18,6 +18,7 @@ import os
 import re
 import time
 import unicodedata
+from collections import Counter
 from datetime import date
 
 from .. import config, db
@@ -52,11 +53,11 @@ GK_ONLY = {"saves": "parate", "goalsConceded": "gol_subiti"}
 SA_EXTRA = ("falli_commessi", "fuorigioco", "autogol", "titolare")
 
 ROLE = {"G": "Portiere", "GK": "Portiere"}
-for _k in ("D", "CD", "CB", "LB", "RB", "WB", "LWB", "RWB", "SW", "LCB", "RCB"):
+for _k in ("D", "DF", "CD", "CB", "LB", "RB", "WB", "LWB", "RWB", "SW", "LCB", "RCB", "FB"):
     ROLE[_k] = "Difensore"
-for _k in ("M", "DM", "CM", "AM", "LM", "RM", "CDM", "CAM"):
+for _k in ("M", "MF", "DM", "CM", "AM", "LM", "RM", "CDM", "CAM", "LCM", "RCM", "LDM", "RDM", "LAM", "RAM"):
     ROLE[_k] = "Centrocampista"
-for _k in ("F", "CF", "ST", "LW", "RW", "SS", "FW", "LF", "RF"):
+for _k in ("F", "FW", "CF", "ST", "S", "LW", "RW", "W", "SS", "LF", "RF", "A"):
     ROLE[_k] = "Attaccante"
 
 
@@ -159,6 +160,14 @@ def _role(pos):
     return ROLE.get((pos or "").split("-")[0].upper(), "Giocatore di movimento")
 
 
+def _vote(stats, pid, pos):
+    role = _role(pos)
+    if role == "Giocatore di movimento":
+        stats["sigle"][pos or "-"] += 1
+        return
+    stats["ruoli"].setdefault(pid, Counter())[role] += 1
+
+
 def _apply(con, cnt, resolver, league, season, eid, c, log, unknown, stats):
     h = resolver.resolve(league, c["home"] or "", "espn", allow_new=False)
     a = resolver.resolve(league, c["away"] or "", "espn", allow_new=False)
@@ -218,10 +227,12 @@ def _apply(con, cnt, resolver, league, season, eid, c, log, unknown, stats):
             pid = scored[0][1]
             con.execute("INSERT OR REPLACE INTO player_map(source, ext_id, player_id) VALUES('espn',?,?)", (p["id"], pid))
             known[p["id"]] = pid
+            _vote(stats, pid, p["pos"])
             vals = {k: v for k, v in vals.items() if k in SA_EXTRA}
         else:
             pid = known.get(p["id"]) or f"espn-{p['id']}"
             stats["solo_espn"] += 1
+            _vote(stats, pid, p["pos"])
             if pid.startswith("espn-"):
                 con.execute("INSERT INTO player(id,name,team_id,position,source) VALUES(?,?,?,?,?) "
                             "ON CONFLICT(id) DO UPDATE SET name=excluded.name, team_id=excluded.team_id, position=excluded.position",
@@ -271,10 +282,18 @@ def fetch(con, cnt, resolver, league, season, log):
         if fetched % 25 == 0:
             con.commit()
     applied, unknown = 0, set()
-    stats = {"abbinati": 0, "non_abbinati": 0, "solo_espn": 0, "esempi": []}
+    stats = {"abbinati": 0, "non_abbinati": 0, "solo_espn": 0, "esempi": [], "ruoli": {}, "sigle": Counter()}
     for r in con.execute("SELECT k, v FROM kv WHERE k LIKE ?", (f"espn:{league}:%",)).fetchall():
         if _apply(con, cnt, resolver, league, season, r["k"].split(":")[2], json.loads(r["v"]), log, unknown, stats):
             applied += 1
+    # ruolo prevalente (difensore, centrocampista, attaccante) dalle posizioni in campo ESPN;
+    # i portieri dei report Lega restano portieri
+    for pid, cn in stats["ruoli"].items():
+        role = cn.most_common(1)[0][0]
+        if role != "Giocatore di movimento":
+            con.execute("UPDATE player SET position=? WHERE id=? AND position != 'Portiere'", (role, pid))
+    if stats["sigle"]:
+        log(f"{league}: posizioni ESPN senza ruolo {dict(stats['sigle'].most_common(6))}")
     if unknown:
         log(f"{league}: squadre ESPN non riconosciute {sorted(unknown)}")
     log(f"{league} {season}: {len(events)} partite concluse su ESPN, {fetched} lette ora, {applied} abbinate")
