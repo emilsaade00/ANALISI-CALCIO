@@ -12,7 +12,7 @@ import traceback
 
 from . import config, db
 from .teams import TeamResolver
-from .sources import fdcouk, openfootball, fdorg, apifootball, openmatchday, fplcore, designazioni, legaseriea
+from .sources import fdcouk, openfootball, fdorg, apifootball, openmatchday, fplcore, designazioni, legaseriea, espn
 from .sources.common import SourceError
 from . import predict, evaluate, export
 
@@ -24,6 +24,7 @@ SOURCES = {
     "fplcore": (fplcore.INFO, fplcore.fetch),
     "legaseriea": (legaseriea.INFO, legaseriea.fetch),
     "designazioni": (designazioni.INFO, designazioni.fetch),
+    "espn": (espn.INFO, espn.fetch),
     "fdorg": (fdorg.INFO, fdorg.fetch),
     "apifootball": (apifootball.INFO, apifootball.fetch),
 }

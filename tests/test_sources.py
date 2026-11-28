@@ -108,3 +108,63 @@ assert ("fpl-200", "dribbling_riusciti") not in ps                              
 st = {(r["side"], r["metric"]): r["value"] for r in con2.execute("SELECT * FROM team_match_stat WHERE match_id='pl-2627-arsenal-brentford'")}
 assert st[("H", "dribbling_tentati")] == 16 and st[("H", "possesso")] == 60, st
 print("open-matchday e FPL-Core OK")
+
+# ESPN: statistiche di squadra, giocatori con minuti dalle sostituzioni, abbinamento ai report Lega, quote scartate
+from pipeline.sources import espn, legaseriea
+def _summ(home, away, hid, aid, roster_h, roster_a, subs):
+    st = lambda f, w, t: [{"name": "foulsCommitted", "displayValue": str(f)}, {"name": "effectiveTackles", "displayValue": str(w)},
+                          {"name": "totalTackles", "displayValue": str(t)}, {"name": "possessionPct", "displayValue": "55.5"}]
+    return {"header": {"competitions": [{"date": "2026-11-21T14:00Z", "status": {"type": {"completed": True}},
+                       "competitors": [{"homeAway": "home", "team": {"id": hid, "displayName": home}},
+                                       {"homeAway": "away", "team": {"id": aid, "displayName": away}}]}]},
+            "boxscore": {"teams": [{"team": {"id": hid}, "statistics": st(12, 9, 15)}, {"team": {"id": aid}, "statistics": st(10, 6, 14)}]},
+            "rosters": [{"homeAway": "home", "team": {"id": hid}, "roster": roster_h}, {"homeAway": "away", "team": {"id": aid}, "roster": roster_a}],
+            "keyEvents": [{"type": {"text": "Substitution"}, "clock": {"displayValue": "67'"}, "participants": [{"athlete": {"id": "3"}}, {"athlete": {"id": "2"}}]}] if subs else [],
+            "odds": [{"non": "deve essere letto"}], "pickcenter": [{"x": 1}]}
+def _pl(pid, name, last, jersey, pos, starter, sub_in=False, fc=1, fs=0):
+    return {"athlete": {"id": pid, "displayName": name, "fullName": name, "lastName": last}, "jersey": jersey,
+            "position": {"abbreviation": pos}, "starter": starter, "subbedIn": sub_in, "subbedOut": pid == "2",
+            "stats": [{"name": "appearances", "value": 1.0}, {"name": "foulsCommitted", "value": fc}, {"name": "foulsSuffered", "value": fs},
+                      {"name": "totalShots", "value": 2.0}, {"name": "offsides", "value": 1.0}, {"name": "saves", "value": 3.0}]}
+calls = []
+def fake_get(url):
+    calls.append(url)
+    if "scoreboard" in url:
+        return {"events": [{"id": "900", "date": "2026-11-21T14:00Z", "status": {"type": {"completed": True}}}]} if url.endswith("202611") else {"events": []}
+    return SUMM
+espn._get = fake_get
+con3 = db.connect(Path(tempfile.mkdtemp()) / "e.sqlite"); R3 = TeamResolver(); c4 = db.Counter()
+# LaLiga: nessun'altra fonte di giocatori -> giocatori ESPN con minuti stimati
+SUMM = _summ("Barcelona", "Real Madrid", "83", "86",
+             [_pl("1", "Joan Garcia", "Garcia", "13", "G", True), _pl("2", "Pedri", "Pedri", "8", "CM", True), _pl("3", "Gavi", "Gavi", "6", "CM", False, True)],
+             [_pl("4", "Vinicius Junior", "Junior", "7", "LW", True, fc=3, fs=4)], True)
+db.upsert_match(con3, c4, league="ll", season="2026-27", home_id="ll-barcelona", away_id="ll-real-madrid", source="openmatchday", kickoff_utc="2026-11-21T14:00:00Z")
+espn.fetch(con3, c4, R3, "ll", "2026-27", lambda m: None)
+assert all("odds" not in r["v"] and "pickcenter" not in r["v"] for r in con3.execute("SELECT v FROM kv WHERE k LIKE 'espn:%'"))
+ts = {(r["side"], r["metric"]): r["value"] for r in con3.execute("SELECT * FROM team_match_stat")}
+assert ts[("H", "contrasti")] == 15 and ts[("H", "contrasti_vinti")] == 9 and ts[("A", "falli")] == 10 and ts[("H", "possesso")] == 55.5, ts
+ps = {(r["player_id"], r["metric"]): r["value"] for r in con3.execute("SELECT * FROM player_match_stat")}
+assert ps[("espn-2", "minuti")] == 67 and ps[("espn-3", "minuti")] == 23 and ps[("espn-1", "minuti")] == 90, ps
+assert ps[("espn-4", "falli_commessi")] == 3 and ps[("espn-4", "falli_subiti")] == 4 and ps[("espn-1", "parate")] == 3
+assert ("espn-2", "parate") not in ps and ps[("espn-3", "titolare")] == 0
+assert con3.execute("SELECT position FROM player WHERE id='espn-1'").fetchone()[0] == "Portiere"
+# Serie A: il report Lega resta la fonte principale, ESPN aggiunge i falli commessi abbinando maglia e nome
+lsa = Path(tempfile.mkdtemp())
+(lsa / "matches.csv").write_text("match_id,giornata,home,away,Passaggi riusciti_home,Passaggi riusciti_away\nG12_INTER_COMO,12,INTER,COMO,500,400\n")
+(lsa / "players.csv").write_text("team,role,jersey,player,MIN,match_id,giornata,T,TP,FS,G\n"
+                                 "INTER,OUT,10,L. MARTÍNEZ,90,G12_INTER_COMO,12,4,2,1,1\nINTER,OUT,9,M. THURAM,75,G12_INTER_COMO,12,2,1,0,0\n")
+legaseriea.BASE = str(lsa)
+db.upsert_match(con3, c4, league="sa", season="2026-27", home_id="sa-inter", away_id="sa-como", source="openmatchday", kickoff_utc="2026-11-21T14:00:00Z")
+legaseriea.fetch(con3, c4, R3, "sa", "2026-27", lambda m: None)
+SUMM = _summ("Internazionale", "Como", "110", "2572",
+             [_pl("50", "Lautaro Martínez", "Martínez", "10", "CF", True, fc=2), _pl("51", "Marcus Thuram", "Thuram", "9", "CF", True, fc=0)], [], False)
+espn.fetch(con3, c4, R3, "sa", "2026-27", lambda m: None)
+ps = {(r["player_id"], r["metric"]): (r["value"], r["source"]) for r in con3.execute("SELECT * FROM player_match_stat WHERE match_id='sa-2627-inter-como'")}
+assert ps[("lsa-inter-l-martinez", "falli_commessi")] == (2, "espn") and ps[("lsa-inter-l-martinez", "tiri")] == (4, "legaseriea"), ps
+assert ps[("lsa-inter-m-thuram", "minuti")] == (75, "legaseriea") and ps[("lsa-inter-m-thuram", "titolare")][0] == 1
+assert not any(k[0].startswith("espn-") for k in ps)
+# una seconda esecuzione non cambia nulla e i dati Lega restano
+legaseriea.fetch(con3, c4, R3, "sa", "2026-27", lambda m: None); espn.fetch(con3, c4, R3, "sa", "2026-27", lambda m: None)
+ps2 = {(r["player_id"], r["metric"]): (r["value"], r["source"]) for r in con3.execute("SELECT * FROM player_match_stat WHERE match_id='sa-2627-inter-como'")}
+assert ps2 == ps, set(ps2.items()) ^ set(ps.items())
+print("ESPN OK")

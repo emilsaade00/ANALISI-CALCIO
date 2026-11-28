@@ -27,16 +27,25 @@
     <a href="#precisione" data-r="precisione">Quanto è preciso?</a>
     <a href="#fonti" data-r="fonti">Fonti</a>
   </nav>
-  <div id="status" class="status"></div>
+  <div class="topr"><button id="install" class="btn-install" hidden>Installa app</button><div id="status" class="status"></div></div>
 </header>
 <main id="app" aria-live="polite"><section class="band"><p class="empty">Caricamento dei dati…</p></section></main>
 <footer class="foot">
-  <p>Serie A, Premier League, Bundesliga, LaLiga. Analisi costruite solo su dati sportivi: nessuna quota o pronostico dei bookmaker. Orari in ora italiana. <a href="#metodo">Metodo</a> · <a href="#fonti">Fonti e aggiornamenti</a></p>
+  <p>Serie A, Premier League, Bundesliga, LaLiga. Analisi costruite solo su dati sportivi: nessuna quota o pronostico dei bookmaker. Orari in ora italiana. <a href="#metodo">Metodo</a> · <a href="#fonti">Fonti e aggiornamenti</a> · <a href="#installa">Installa l'app</a></p>
 </footer>
 <script src="model.js"></script>
 <script src="core.js"></script>
 <script src="match.js"></script>
 <script src="views.js"></script>
+<script>
+(function(){
+  var btn=document.getElementById('install');
+  window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__installPrompt=e;btn.hidden=false;});
+  window.__doInstall=function(){var p=window.__installPrompt;if(!p){location.hash='#installa';return;}p.prompt();p.userChoice.then(function(){window.__installPrompt=null;btn.hidden=true;});};
+  btn.addEventListener('click',window.__doInstall);
+  window.addEventListener('appinstalled',function(){btn.hidden=true;window.__installPrompt=null;});
+})();
+</script>
 <script>try{if('serviceWorker' in navigator&&location.protocol==='https:'&&window.top===window.self)navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}</script>
 </body>
 </html>

@@ -45,6 +45,9 @@ CREATE TABLE IF NOT EXISTS player_match_stat (
   match_id TEXT, player_id TEXT, team_id TEXT, metric TEXT, value REAL, source TEXT,
   PRIMARY KEY (match_id, player_id, metric)
 );
+CREATE TABLE IF NOT EXISTS player_map (
+  source TEXT, ext_id TEXT, player_id TEXT, PRIMARY KEY (source, ext_id)
+);
 CREATE TABLE IF NOT EXISTS lineup (
   match_id TEXT, team_id TEXT, player_id TEXT, status TEXT, kind TEXT,
   source TEXT, updated_at TEXT, detail TEXT,
@@ -105,7 +108,7 @@ def match_id(league, season, home_id, away_id):
 # Priorita' delle fonti per ciascun campo (indice piu' basso = piu' affidabile)
 PRIORITY = {
     "kickoff": ["fdorg", "apifootball", "fdcouk", "openmatchday", "openfootball", "mirror", "fplcore", "legaseriea"],
-    "result": ["fdcouk", "fdorg", "apifootball", "openmatchday", "legaseriea", "mirror", "openfootball", "fplcore"],
+    "result": ["fdcouk", "fdorg", "apifootball", "openmatchday", "legaseriea", "espn", "mirror", "openfootball", "fplcore"],
     "calendar": ["fdorg", "apifootball", "openfootball", "openmatchday", "fdcouk", "mirror", "fplcore", "legaseriea"],
 }
 

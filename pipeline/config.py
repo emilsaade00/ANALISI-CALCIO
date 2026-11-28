@@ -56,7 +56,7 @@ API_FOOTBALL_DAILY_BUDGET = int(os.environ.get("API_FOOTBALL_DAILY_BUDGET", "90"
 
 # Fonti abilitate: "fdcouk,fdorg,apifootball,openfootball,mirror"
 SOURCES_ENABLED = [s.strip() for s in os.environ.get(
-    "CALCIO_SOURCES", "openfootball,fdcouk,mirror,openmatchday,fplcore,legaseriea,designazioni,fdorg,apifootball").split(",") if s.strip()]
+    "CALCIO_SOURCES", "openfootball,fdcouk,mirror,openmatchday,fplcore,legaseriea,designazioni,espn,fdorg,apifootball").split(",") if s.strip()]
 
 MODEL_VERSION = "1.1.0"
 SCHEDULE_NOTE = os.environ.get("CALCIO_SCHEDULE_NOTE",

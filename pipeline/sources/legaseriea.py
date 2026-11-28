@@ -38,6 +38,9 @@ GK = {"MIN": "minuti", "GS": "gol_subiti", "PA": "parate", "RE": "respinte_porti
       "ESP": "rossi", "AS": "assist", "P": "passaggi_riusciti", "PG": "tocchi"}
 
 
+EVENTS = {"G", "AS", "AMM", "ESP", "GS"}
+
+
 def _num(v):
     try:
         return float(v) if v not in (None, "") else None
@@ -99,7 +102,9 @@ def fetch(con, cnt, resolver, league, season, log):
             if mins > 0:
                 for col, metric in (GK if gk else OUT).items():
                     v = _num(r.get(col))
-                    if v is None and col in active and metric != "minuti":
+                    # il PDF lascia vuoti gli zeri: per gli eventi (gol, assist, cartellini) vuoto = 0 sempre,
+                    # per le altre colonne solo se la colonna e' compilata per qualcuno nella partita
+                    if v is None and metric != "minuti" and (col in active or col in EVENTS):
                         v = 0.0
                     if v is not None:
                         vals[metric] = v
@@ -108,9 +113,12 @@ def fetch(con, cnt, resolver, league, season, log):
                     vals["passaggi"] = round(vals["passaggi_riusciti"] / pct * 100)
                 # i report non indicano i titolari: si considera titolare chi gioca almeno 60 minuti
                 vals["titolare"] = 1.0 if mins >= 60 else 0.0
+            if _num(r.get("jersey")) is not None:
+                vals["_maglia"] = _num(r.get("jersey"))  # serve solo ad abbinare i giocatori di altre fonti
             for metric, v in vals.items():
                 con.execute("INSERT INTO player_match_stat VALUES(?,?,?,?,?,?) ON CONFLICT(match_id, player_id, metric) "
-                            "DO UPDATE SET value=excluded.value, team_id=excluded.team_id",
+                            "DO UPDATE SET value=excluded.value, team_id=excluded.team_id, source=excluded.source "
+                            "WHERE NOT (excluded.metric = 'titolare' AND player_match_stat.source = 'espn')",
                             (mid, pid, tid, metric, float(v), "legaseriea"))
             n += 1
     log(f"sa {season}: {len(ids)} partite con report ufficiale, {n} righe giocatore")

@@ -46,14 +46,16 @@
     if (S.players[key] === undefined && !has('pl/' + key)) S.players[key] = null;
     if (S.players[key] === undefined) {
       const d = await getJSON('data/pl/' + key + '.json', true);
+      const sd = d ? await season(lg, s) : null;
       if (d) {
         d.byMatch = {}; d.byPlayer = {};
         d.rows.forEach(r => {
           const mid = d.mids[r[0]], pid = d.pids[r[1]], tid = d.tids[r[2]]; const v = {};
           d.metrics.forEach((k, i) => { if (r[3 + i] != null) v[k] = r[3 + i]; });
-          const o = { mid, pid, tid, v };
+          const o = { mid, pid, tid, v, t: sd && sd.byId[mid] ? sd.byId[mid].t : 0 };
           (d.byMatch[mid] = d.byMatch[mid] || []).push(o); (d.byPlayer[pid] = d.byPlayer[pid] || []).push(o);
         });
+        Object.values(d.byPlayer).forEach(l => l.sort((a, b) => a.t - b.t));  // ordine cronologico per le ultime partite
         d.stats = null; d.rows = null;
       }
       S.players[key] = d;
@@ -231,7 +233,17 @@
     return Object.values(by);
   }
   // valore di una metrica giocatore: {v, n} oppure null se il dato manca
+  // media delle ultime n presenze (con minuti) in cui la fonte ha il dato; per i rapporti: somma num / somma den
+  function pLast(o, code, n) {
+    n = n || 5; const pl = o.ms.filter(r => (r.v.minuti || 0) > 0).sort((a, b) => (a.t || 0) - (b.t || 0)).slice(-n);
+    const R = (S.meta.rapporti_giocatore || []).find(x => x.code === code);
+    if (R) { let a = 0, b = 0, k = 0; pl.forEach(r => { if (r.v[R.num] != null && r.v[R.den] != null) { a += r.v[R.num]; b += r.v[R.den]; k++; } }); return k ? (b ? { v: a / b * 100, pct: true, n: k } : { nonapp: true }) : null; }
+    const vals = pl.filter(r => r.v[code] != null).map(r => r.v[code]); if (!vals.length) return null;
+    return { v: vals.reduce((x, y) => x + y, 0) / vals.length, n: vals.length };
+  }
+  function pShowL(x) { if (!x || x.nonapp) return pShow(x); return pShow(x, x.pct ? 0 : 2) + (x.n < 5 ? `<span class="sub" title="presenze con il dato"> (${x.n})</span>` : ''); }
   function pVal(o, code, mode) {
+    if (mode === 'l5') return pLast(o, code, 5);
     const R = (S.meta.rapporti_giocatore || []).find(x => x.code === code);
     if (R) { const a = o.tot[R.num], b = o.tot[R.den]; if (a == null || b == null) return null; return b ? { v: a / b * 100, pct: true } : { nonapp: true }; }
     const t = o.tot[code]; if (t == null) return null;
@@ -271,5 +283,5 @@
 
   window.C = { S, NA, TZ, esc, nf, pc, scode, sfrom, dfmt, dayKey, hm, dlong, dshort, dnum, dtime, getJSON, meta, evalData,
     leagueInfo, LGN, season, preds, players, prevSeason, teamName, played, res, val, agg, show, cellVal, teamMatches,
-    leagueList, standings, metricByCode, formChips, matchUrl, teamUrl, pAgg, pVal, pShow, pMetricMeta, pMissing, pPick, pAvail };
+    leagueList, standings, metricByCode, formChips, matchUrl, teamUrl, pAgg, pVal, pShow, pMetricMeta, pMissing, pPick, pAvail, pLast, pShowL };
 })();

@@ -14,7 +14,7 @@ sulle quote sono esclusi da raccolta dati, stima, selezione degli indicatori e v
 | Cartella | Contenuto |
 |---|---|
 | `pipeline/` | Importazione dalle fonti, database SQLite, modello, pronostici, verifica, esportazione |
-| `pipeline/sources/` | Un modulo per fonte: football-data.co.uk, mirror GitHub, openfootball, football-data.org, API-Football |
+| `pipeline/sources/` | Un modulo per fonte: football-data.co.uk, mirror GitHub, openfootball, open-matchday, FPL-Core, Lega Serie A, ESPN, football-data.org, API-Football |
 | `web/` | L'app (HTML, CSS, JavaScript senza dipendenze) e i dati esportati in `web/data/` |
 | `db/calcio.sqlite` | Il database (creato al primo aggiornamento): partite, statistiche, arbitri, giocatori, pronostici, storico aggiornamenti. Su GitHub resta nella cache delle Actions perché supera i 100 MB |
 | `data/pronostici/` | Archivio permanente, versionato in git, di ogni pronostico registrato prima della gara (data, ora, versione del modello, dati usati) |
@@ -32,9 +32,10 @@ sulle quote sono esclusi da raccolta dati, stima, selezione degli indicatori e v
 | open-matchday (GitHub, ogni giorno) | no | Stagione in corso per i 4 campionati: calendario, risultati, primo tempo, tiri, tiri in porta, falli, corner anche per tempo, cartellini, minuti dei gol. Uso non commerciale con attribuzione. I file di quote del repository non vengono mai letti. |
 | FPL-Core-Insights (GitHub, due volte al giorno) | no | Premier League: statistiche avanzate di squadra e di ogni giocatore (xG, grandi occasioni, passaggi, cross, dribbling, contrasti, intercetti, duelli, falli subiti e commessi, cartellini). Origine FotMob e Fantasy Premier League. |
 | Match Report Lega Serie A (serie-a-observatory, GitHub, settimanale) | no | Serie A: statistiche ufficiali di squadra e di ogni giocatore (tiri, tiri in porta, passaggi chiave, recuperi, palloni giocati, falli subiti, cartellini, parate). Non contengono falli commessi, contrasti e dribbling del singolo giocatore. |
+| ESPN (site.api.espn.com, ogni giorno) | no | Stagione in corso per i 4 campionati. Squadra: contrasti effettuati e vinti (quindi persi), intercetti, spazzate, passaggi, cross, lanci lunghi, possesso, falli. Giocatore: falli commessi e subiti, tiri, tiri in porta, gol, assist, fuorigioco, cartellini, titolari; minuti stimati dalle sostituzioni. In Serie A si abbina ai giocatori dei report Lega (maglia e nome) e aggiunge solo falli commessi, fuorigioco e titolari. Interfaccia pubblica non documentata, uso personale; le sezioni con quote della risposta vengono scartate. |
 | Designazioni AIA (`data/manuale/`) | no | Arbitro di ogni partita di Serie A, trascritto dai comunicati ufficiali con la fonte di ogni riga. Va aggiornato a ogni giornata (una riga per partita) se non si attiva API-Football. |
 | football-data.org | sì, gratuita | Calendario ufficiale con orari, giornate, rinvii, stato partita, arbitri designati. |
-| API-Football | sì, gratuita fino a 100 richieste/giorno | Possesso, passaggi, xG del fornitore, tiri in/fuori area, parate, statistiche giocatore, formazioni ufficiali, indisponibili. Gli endpoint `/odds` e `/predictions` non vengono mai chiamati. |
+| API-Football | sì; il piano gratuito copre solo le stagioni 2022–2024, per la stagione in corso serve un piano a pagamento | Possesso, passaggi, xG del fornitore, tiri in/fuori area, parate, statistiche giocatore (contrasti, dribbling, duelli), formazioni ufficiali, indisponibili. Gli endpoint `/odds` e `/predictions` non vengono mai chiamati. |
 
 Copertura reale, stato e ora dell'ultimo aggiornamento riuscito sono visibili nella pagina **Fonti** dell'app.
 
@@ -110,7 +111,7 @@ Dettagli nella pagina **Metodo** dell'app e in `pipeline/model.py`.
 
 ## Limiti dichiarati
 
-- Dati individuali dei giocatori: Premier League (FPL-Core-Insights) e Serie A (Match Report ufficiali, senza falli commessi, contrasti e dribbling); Bundesliga e LaLiga solo con API-Football.
+- Dati individuali dei giocatori: Premier League (FPL-Core-Insights); Serie A (Match Report ufficiali più falli commessi, fuorigioco e titolari da ESPN); Bundesliga e LaLiga da ESPN. Contrasti e dribbling del singolo giocatore solo in Premier League: nessuna fonte gratuita li pubblica per gli altri campionati (contrasti di squadra disponibili per tutti da ESPN).
 - Arbitri: Serie A dal file delle designazioni AIA; Premier League dalle stagioni di football-data.co.uk; per le altre leghe e per la stagione in corso in automatico servono API-Football o football-data.org.
 - Non disponibili con nessuna delle fonti configurate: grandi occasioni, xA, passaggi progressivi, cross, ingressi
   nell'ultimo terzo, errori che portano al tiro, minuto del primo corner. Compaiono nel catalogo come "n.d.".

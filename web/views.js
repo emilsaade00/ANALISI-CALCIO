@@ -294,24 +294,27 @@
     const MA = C.pMetricMeta(cur.pd); const asked = ui.plMetric;
     const metric = C.pPick(cur.pd, asked, 'tiri_porta'); ui.plMetric = metric;
     const swapped = asked && asked !== metric ? (M.find(x => x.code === asked) || {}).name : null;
-    const mode = ui.plMode || 'p90'; const mm = M.find(x => x.code === metric);
+    const mm = M.find(x => x.code === metric);
+    const modes = mm.kind === 'sum' ? (mm.per90 ? [['p90', 'Per 90 minuti'], ['pm', 'Per partita'], ['tot', 'Totale'], ['l5', 'Media ultime 5']] : [['tot', 'Totale'], ['pm', 'Per partita'], ['l5', 'Media ultime 5']]) : [['tot', 'Stagione'], ['l5', 'Ultime 5']];
+    const mode = modes.some(z => z[0] === ui.plMode) ? ui.plMode : modes[0][0];
     const missing = C.pMissing(cur.pd);
     const roles = [...new Set(all.map(o => o.role))].sort();
+    const perMatch = (o, code) => { const t = o.tot[code]; return t == null || !o.nK[code] ? null : { v: t / o.nK[code] }; };
+    const valOf = (o, code, md) => md === 'pm' ? perMatch(o, code) : C.pVal(o, code, md);
     const teams = [...new Set(all.map(o => o.tid))].sort((a, b) => C.teamName(cur.d, a).localeCompare(C.teamName(cur.d, b)));
     const list = all.filter(o => (!ui.plRole || o.role === ui.plRole) && (!ui.plTeam || o.tid === ui.plTeam) && o.min >= ui.plMin)
-      .map(o => ({ o, x: C.pVal(o, metric, mm && mm.kind === 'sum' && mm.per90 ? mode : 'tot') })).filter(r => r.x && !r.x.nonapp).sort((a, b) => b.x.v - a.x.v).slice(0, 100);
+      .map(o => ({ o, x: valOf(o, metric, mode) })).filter(r => r.x && !r.x.nonapp).sort((a, b) => b.x.v - a.x.v).slice(0, 100);
     const ctxCols = MA.filter(x => x.cat === mm.cat && x.code !== metric && x.kind === 'sum' && x.code !== 'titolare').slice(0, 2);
     const pool = all.filter(o => (!ui.plRole || o.role === ui.plRole) && o.min >= ui.plMin);
-    const avgOf = (code, md) => { const v = pool.map(o => C.pVal(o, code, md)).filter(z => z && !z.nonapp).map(z => z.v); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-    const perMatch = (o, code) => { const t = o.tot[code]; return t == null || !o.nK[code] ? null : { v: t / o.nK[code] }; };
+    const avgOf = (code, md) => { const v = pool.map(o => valOf(o, code, md)).filter(z => z && !z.nonapp).map(z => z.v); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
     const avgPM = (() => { if (mm.kind !== 'sum') return null; const v = pool.map(o => perMatch(o, metric)).filter(Boolean).map(z => z.v); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; })();
     const cmp = all.filter(o => ui.plCmp.includes(o.pid));
     const cmpRoles = new Set(cmp.map(o => o.role));
     app.innerHTML = band(`<h1>Giocatori</h1><p class="lead">${esc(cur.L.name)} ${esc(cur.s)} · fonte: ${esc(cur.pd.fonte)} · ${all.length} giocatori</p>
-      ${noData.length ? `<p class="info">Dati individuali non disponibili per ${esc(noData.join(', '))}: servono API-Football o un'altra fonte di dati per giocatore (vedi <a href="#fonti">Fonti</a>).</p>` : ''}
+      ${noData.length ? `<p class="info">Dati individuali non disponibili per ${esc(noData.join(', '))} (vedi <a href="#fonti">Fonti</a>).</p>` : ''}
       <div class="toolbar"><label class="sel">Campionato <select id="p-lg">${sets.map(x => opt(x.L.code, x.L.name, cur.L.code)).join('')}</select></label>
       <label class="sel">Statistica ${metricSelect('p-metric', metric, MA)}</label>
-      ${mm.kind === 'sum' && mm.per90 ? `<div class="seg">${[['p90', 'Per 90 minuti'], ['tot', 'Totale']].map(([k, t]) => `<button data-pmode="${k}" class="${mode === k ? 'on' : ''}">${t}</button>`).join('')}</div>` : ''}
+      <div class="seg" role="group" aria-label="Ordina per">${modes.map(([k, t]) => `<button data-pmode="${k}" class="${mode === k ? 'on' : ''}">${t}</button>`).join('')}</div>
       <label class="sel">Squadra <select id="p-team">${opt('', 'Tutte', ui.plTeam)}${teams.map(t => opt(t, C.teamName(cur.d, t), ui.plTeam)).join('')}</select></label>
       <label class="sel">Ruolo <select id="p-role">${opt('', 'Tutti', ui.plRole)}${roles.map(r => opt(r, r, ui.plRole)).join('')}</select></label>
       <label class="sel">Minuti minimi <input type="number" id="p-min" min="0" step="90" value="${ui.plMin}"></label></div>
@@ -319,11 +322,12 @@
         MA.filter(x => x.kind === 'ratio' || x.per90).map(x => `<tr><td>${esc(x.name)}${x.kind === 'sum' ? ' <span class="sub">/90</span>' : ''}</td>${cmp.map(o => `<td class="num">${C.pShow(C.pVal(o, x.code, 'p90'))}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p><button class="btn" data-clearcmp="1">Svuota confronto</button></p>` : ''}
       ${swapped ? `<p class="warn">"${esc(swapped)}" non è disponibile per ${esc(cur.L.name)} ${esc(cur.s)}: la fonte non lo registra. Ti mostro la statistica più vicina, "${esc(mm.name)}".</p>` : ''}
       <h2>${esc(mm.name)}</h2>
-      <div class="kpis"><div class="kpi hi"><b>${avgOf(metric, mode) == null ? 'n.d.' : C.pShow({ v: avgOf(metric, mode), pct: mm.kind === 'ratio' }, 2)}</b><span>media del campionato ${mm.kind === 'sum' && mm.per90 && mode === 'p90' ? 'per 90 minuti' : mm.kind === 'ratio' ? '' : 'in stagione'}</span><i>${pool.length} giocatori${ui.plRole ? ' · ' + esc(ui.plRole) : ''} con almeno ${ui.plMin}'</i></div>
-      ${avgPM != null ? `<div class="kpi"><b>${nf(avgPM, 2)}</b><span>media per partita giocata</span><i>stessi giocatori</i></div>` : ''}</div>
-      <p class="note">Per ogni giocatore: totale stagionale, media per partita giocata e valore ogni 90 minuti. Spunta fino a 3 giocatori per confrontarli.</p>
-      <div class="scroll"><table class="ptab"><thead><tr><th></th><th>#</th><th>Giocatore</th><th>Squadra</th><th class="num">Pres.</th><th class="num">Min</th>${mm.kind === 'sum' ? `<th class="num">Totale</th><th class="num">Per partita</th>${mm.per90 ? "<th class='num'>Per 90'</th>" : ''}` : `<th class="num">${esc(mm.name)}</th>`}${ctxCols.map(c => `<th class="num">${esc(c.name)}${c.per90 ? '/90' : ''}</th>`).join('')}</tr></thead><tbody>${list.map((r, i) =>
-        `<tr><td><input type="checkbox" data-cmp="${r.o.pid}" ${ui.plCmp.includes(r.o.pid) ? 'checked' : ''} aria-label="Confronta ${esc(r.o.name)}"></td><td>${i + 1}</td><td><a href="#giocatore-${r.o.pid}">${esc(r.o.name)}</a><div class="sub">${esc(r.o.role)}</div></td><td>${esc(C.teamName(cur.d, r.o.tid))}</td><td class="num">${r.o.app}</td><td class="num">${r.o.min}</td>${mm.kind === 'sum' ? `<td class="num">${C.pShow(C.pVal(r.o, metric, 'tot'))}</td><td class="num">${C.pShow(perMatch(r.o, metric), 2)}</td>${mm.per90 ? `<td class="num"><b>${C.pShow(C.pVal(r.o, metric, 'p90'), 2)}</b></td>` : ''}` : `<td class="num"><b>${C.pShow(r.x)}</b></td>`}${ctxCols.map(c => `<td class="num">${C.pShow(C.pVal(r.o, c.code, 'p90'), 2)}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="10" class="empty">Nessun giocatore con questo filtro.</td></tr>'}</tbody></table></div>
+      <div class="kpis"><div class="kpi hi"><b>${avgOf(metric, mode) == null ? 'n.d.' : C.pShow({ v: avgOf(metric, mode), pct: mm.kind === 'ratio' }, 2)}</b><span>media del campionato ${{ p90: 'per 90 minuti', pm: 'per partita giocata', l5: 'nelle ultime 5 presenze', tot: mm.kind === 'ratio' ? 'in stagione' : 'in stagione (totale)' }[mode]}</span><i>${pool.length} giocatori${ui.plRole ? ' · ' + esc(ui.plRole) : ''} con almeno ${ui.plMin}'</i></div>
+      ${avgPM != null && mode !== 'pm' ? `<div class="kpi"><b>${nf(avgPM, 2)}</b><span>media per partita giocata</span><i>stessi giocatori</i></div>` : ''}
+      ${mode !== 'l5' && avgOf(metric, 'l5') != null ? `<div class="kpi"><b>${C.pShow({ v: avgOf(metric, 'l5'), pct: mm.kind === 'ratio' }, 2)}</b><span>media nelle ultime 5 presenze</span><i>stessi giocatori</i></div>` : ''}</div>
+      <p class="note">Per ogni giocatore: totale stagionale, media per partita giocata, valore ogni 90 minuti e media delle ultime 5 presenze (tra parentesi quante, se meno di 5). Ordina con i pulsanti qui sopra. Spunta fino a 3 giocatori per confrontarli.</p>
+      <div class="scroll"><table class="ptab"><thead><tr><th></th><th>#</th><th>Giocatore</th><th>Squadra</th><th class="num">Pres.</th><th class="num">Min</th>${mm.kind === 'sum' ? `<th class="num">Totale</th><th class="num">Per partita</th>${mm.per90 ? "<th class='num'>Per 90'</th>" : ''}` : `<th class="num">${esc(mm.name)}</th>`}<th class="num">Ultime 5</th>${ctxCols.map(c => `<th class="num">${esc(c.name)}${c.per90 ? '/90' : ''}</th>`).join('')}</tr></thead><tbody>${list.map((r, i) =>
+        `<tr><td><input type="checkbox" data-cmp="${r.o.pid}" ${ui.plCmp.includes(r.o.pid) ? 'checked' : ''} aria-label="Confronta ${esc(r.o.name)}"></td><td>${i + 1}</td><td><a href="#giocatore-${r.o.pid}">${esc(r.o.name)}</a><div class="sub">${esc(r.o.role)}</div></td><td>${esc(C.teamName(cur.d, r.o.tid))}</td><td class="num">${r.o.app}</td><td class="num">${r.o.min}</td>${mm.kind === 'sum' ? `<td class="num${mode === 'tot' ? ' hl' : ''}">${C.pShow(C.pVal(r.o, metric, 'tot'))}</td><td class="num${mode === 'pm' ? ' hl' : ''}">${C.pShow(perMatch(r.o, metric), 2)}</td>${mm.per90 ? `<td class="num${mode === 'p90' ? ' hl' : ''}">${C.pShow(C.pVal(r.o, metric, 'p90'), 2)}</td>` : ''}` : `<td class="num${mode === 'tot' ? ' hl' : ''}">${C.pShow(C.pVal(r.o, metric, 'tot'))}</td>`}<td class="num${mode === 'l5' ? ' hl' : ''}">${C.pShowL(C.pLast(r.o, metric))}</td>${ctxCols.map(c => `<td class="num">${C.pShow(C.pVal(r.o, c.code, 'p90'), 2)}</td>`).join('')}</tr>`).join('') || '<tr><td colspan="10" class="empty">Nessun giocatore con questo filtro.</td></tr>'}</tbody></table></div>
       ${missing.length ? `<p class="note"><b>Non registrate dalla fonte per ${esc(cur.L.name)} ${esc(cur.s)}:</b> ${missing.map(esc).join(', ')}. Fonte attuale: ${esc(cur.pd.fonte)}.</p>` : ''}`);
     const rerun = () => playersPage();
     document.getElementById('p-lg').onchange = e => { ui.plLg = e.target.value; ui.plTeam = ''; rerun(); };
@@ -345,15 +349,15 @@
     const ms = o.ms.map(r => ({ r, m: x.d.byId[r.mid] })).filter(z => z.m).sort((a, b) => b.m.t - a.m.t);
     app.innerHTML = band(`<p class="crumbs"><a href="#giocatori">Giocatori</a> · ${esc(x.L.name)} ${esc(x.s)}</p><h1>${esc(o.name)}</h1>
       <p class="lead"><a href="${C.teamUrl(o.tid)}">${esc(C.teamName(x.d, o.tid))}</a> · ${esc(o.role)} · ${o.app} presenze, ${o.starts} da titolare, ${o.min} minuti</p>
-      <p class="note">Media ruolo e percentile: confronto con i ${peers.length} giocatori dello stesso ruolo con almeno 450 minuti in ${esc(x.L.name)} (media ruolo per 90 minuti; percentile 100 = valore più alto). Fonte: ${esc(x.pd.fonte)}.</p>`) +
+      <p class="note">Ultime 5: media per partita nelle ultime 5 presenze (tra parentesi quante, se meno di 5). Media ruolo e percentile: confronto con i ${peers.length} giocatori dello stesso ruolo con almeno 450 minuti in ${esc(x.L.name)} (media ruolo per 90 minuti; percentile 100 = valore più alto). Fonte: ${esc(x.pd.fonte)}.</p>`) +
       band(cats.map(c => { const rows = M.filter(z => z.cat === c).map(z => {
         const tv = C.pVal(o, z.code, 'tot'); if (!tv) return '';
         const md = z.kind === 'sum' && z.per90 ? 'p90' : 'tot';
         const pv = md === 'p90' ? C.pVal(o, z.code, 'p90') : null; const pr = pctRank(peers, o, z.code, md);
         const pm = z.kind === 'sum' && o.nK[z.code] ? o.tot[z.code] / o.nK[z.code] : null;
         const pvals = peers.map(q => C.pVal(q, z.code, md)).filter(q => q && !q.nonapp).map(q => q.v); const ravg = pvals.length ? pvals.reduce((a, b) => a + b, 0) / pvals.length : null;
-        return `<tr><td>${esc(z.name)}</td><td class="num">${C.pShow(tv)}</td><td class="num">${pm == null ? '<span class="nd">n/a</span>' : nf(pm, 2)}</td><td class="num">${pv ? `<b>${C.pShow(pv, 2)}</b>` : '<span class="nd">n/a</span>'}</td><td class="num">${ravg == null ? '<span class="nd" title="dato non disponibile">n.d.</span>' : z.kind === 'ratio' ? nf(ravg, 0) + '%' : nf(ravg, 2)}</td><td class="num">${pr == null ? '<span class="nd" title="dato non disponibile">n.d.</span>' : `<span class="pbar"><i style="width:${pr}%"></i></span> ${pr}`}</td></tr>`; }).join('');
-        return rows ? `<h3>${esc(c)}</h3><div class="scroll"><table><thead><tr><th>Statistica</th><th class="num">Totale</th><th class="num">Per partita</th><th class="num">Per 90'</th><th class="num">Media ruolo</th><th class="num">Percentile</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''; }).join('') +
+        return `<tr><td>${esc(z.name)}</td><td class="num">${C.pShow(tv)}</td><td class="num">${pm == null ? '<span class="nd">n/a</span>' : nf(pm, 2)}</td><td class="num">${pv ? `<b>${C.pShow(pv, 2)}</b>` : '<span class="nd">n/a</span>'}</td><td class="num">${C.pShowL(C.pLast(o, z.code))}</td><td class="num">${ravg == null ? '<span class="nd" title="dato non disponibile">n.d.</span>' : z.kind === 'ratio' ? nf(ravg, 0) + '%' : nf(ravg, 2)}</td><td class="num">${pr == null ? '<span class="nd" title="dato non disponibile">n.d.</span>' : `<span class="pbar"><i style="width:${pr}%"></i></span> ${pr}`}</td></tr>`; }).join('');
+        return rows ? `<h3>${esc(c)}</h3><div class="scroll"><table><thead><tr><th>Statistica</th><th class="num">Totale</th><th class="num">Per partita</th><th class="num">Per 90'</th><th class="num">Ultime 5</th><th class="num">Media ruolo</th><th class="num">Percentile</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''; }).join('') +
         (C.pMissing(x.pd).length ? `<p class="note"><b>Non registrate dalla fonte per ${esc(x.L.name)}:</b> ${C.pMissing(x.pd).map(esc).join(', ')}.</p>` : '')) +
       band(playerThresholds(o, x.d)) +
       band(`<h2>Partita per partita</h2><div class="toolbar"><label class="sel">Statistica ${metricSelect('pd-metric', metric, M.filter(z => z.kind === 'sum'))}</label></div>
@@ -387,8 +391,8 @@
     const list = all.filter(r => r.t).sort((a, b) => ((b.x && !b.x.nonapp) ? b.x.v : -1) - ((a.x && !a.x.nonapp) ? a.x.v : -1) || (b.t.v || 0) - (a.t.v || 0));
     const nr = all.filter(r => !r.t).map(r => r.o.name + (r.o.role ? ' (' + r.o.role.toLowerCase() + ')' : ''));
     return `<h2>Giocatori della squadra</h2><div class="toolbar"><label class="sel">Statistica ${metricSelect('tp-metric', metric, M)}</label></div>
-      <div class="scroll"><table><thead><tr><th>Giocatore</th><th>Ruolo</th><th class="num">Pres.</th><th class="num">Tit.</th><th class="num">Min</th><th class="num">${esc(mm.name)} totale</th><th class="num">${mm.kind === 'sum' && mm.per90 ? 'Per 90\'' : ''}</th></tr></thead><tbody>${list.map(({ o, x, t }) =>
-        `<tr><td><a href="#giocatore-${o.pid}">${esc(o.name)}</a></td><td>${esc(o.role)}</td><td class="num">${o.app}</td><td class="num">${o.starts}</td><td class="num">${o.min}</td><td class="num">${C.pShow(t)}</td><td class="num">${mm.kind === 'sum' && mm.per90 ? C.pShow(x) : ''}</td></tr>`).join('')}</tbody></table></div><p class="note">Fonte: ${esc(pd.fonte)}. Giocatori ordinati per valore per 90 minuti.${nr.length ? ' ' + esc(mm.name) + ' non rilevato dalla fonte per: ' + nr.map(esc).join(', ') + '.' : ''}${C.pMissing(pd).length ? ' Non registrate dalla fonte: ' + C.pMissing(pd).map(esc).join(', ') + '.' : ''}</p>`;
+      <div class="scroll"><table><thead><tr><th>Giocatore</th><th>Ruolo</th><th class="num">Pres.</th><th class="num">Tit.</th><th class="num">Min</th><th class="num">${esc(mm.name)} totale</th>${mm.kind === 'sum' ? '<th class="num">Per partita</th>' : ''}${mm.kind === 'sum' && mm.per90 ? '<th class="num">Per 90\'</th>' : ''}<th class="num">Ultime 5</th></tr></thead><tbody>${list.map(({ o, x, t }) =>
+        `<tr><td><a href="#giocatore-${o.pid}">${esc(o.name)}</a></td><td>${esc(o.role)}</td><td class="num">${o.app}</td><td class="num">${o.starts}</td><td class="num">${o.min}</td><td class="num">${C.pShow(t)}</td>${mm.kind === 'sum' ? `<td class="num">${o.nK[metric] ? nf(o.tot[metric] / o.nK[metric], 2) : '<span class="nd">n/a</span>'}</td>` : ''}${mm.kind === 'sum' && mm.per90 ? `<td class="num"><b>${C.pShow(x, 2)}</b></td>` : ''}<td class="num">${C.pShowL(C.pLast(o, metric))}</td></tr>`).join('')}</tbody></table></div><p class="note">Fonte: ${esc(pd.fonte)}. Giocatori ordinati per valore per 90 minuti.${nr.length ? ' ' + esc(mm.name) + ' non rilevato dalla fonte per: ' + nr.map(esc).join(', ') + '.' : ''}${C.pMissing(pd).length ? ' Non registrate dalla fonte: ' + C.pMissing(pd).map(esc).join(', ') + '.' : ''}</p>`;
   }
 
   // ---------------------------------------------------------------- indice statistiche
@@ -570,7 +574,7 @@
         `<tr><td><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.name)}</a><div class="sub">${esc(f.license)}</div></td><td class="st-${esc(f.stato)}">${st(f.stato)}</td><td>${f.ultimo_successo ? C.dtime(f.ultimo_successo) : 'mai'}</td><td>${esc(f.provides)}</td><td>${f.needs_key ? (f.key_configured ? 'configurata' : `mancante: <code>${esc(f.key_env)}</code>`) : 'non serve'}</td><td class="sub">${esc(f.messaggio)}${f.righe ? `<br>righe lette ${f.righe[0]}, nuove ${f.righe[1]}, corrette ${f.righe[2]}` : ''}</td></tr>`).join('')}</tbody></table></div>`) +
       band(`<h2>Come attivare le fonti con chiave</h2><ol class="steps">
         <li><b>football-data.org</b> (gratuita): registrati su football-data.org, ricevi il token via email. Aggiunge calendario ufficiale con orari, rinvii, giornate e arbitri designati per tutti e quattro i campionati.</li>
-        <li><b>API-Football</b> (gratuita fino a 100 richieste al giorno): crea un account su dashboard.api-football.com e copia la chiave. Aggiunge possesso, passaggi, xG del fornitore, statistiche dei giocatori, formazioni ufficiali e indisponibili.</li>
+        <li><b>API-Football</b>: il piano gratuito (100 richieste al giorno) copre solo le stagioni dal 2022 al 2024, quindi non aggiunge nulla alla stagione in corso. Con un piano a pagamento aggiunge contrasti, dribbling e duelli per ogni giocatore, formazioni ufficiali e indisponibili. Chiave su dashboard.api-football.com.</li>
         <li>Nel repository GitHub dell'app apri <i>Settings → Secrets and variables → Actions → New repository secret</i> e crea <code>FOOTBALL_DATA_ORG_KEY</code> e <code>API_FOOTBALL_KEY</code>. Le chiavi restano sul server: non finiscono mai nella pagina né nei dati pubblicati.</li>
         <li>Avvia una volta il workflow <i>Aggiornamento quotidiano</i> dalla scheda Actions (o attendi l'esecuzione del giorno dopo). Lo stato qui sopra diventerà "funzionante".</li></ol>
         <p class="note">Regola permanente: nessuna fonte di quote, probabilità implicite o pronostici dei bookmaker viene usata. Dalle tabelle di football-data.co.uk si importano solo le colonne sportive; gli endpoint di quote e pronostici di API-Football non vengono mai chiamati.</p>`) +
@@ -597,7 +601,24 @@
       <h2>2. Dalle medie alle probabilità</h2><p>Gol: distribuzione di Poisson per ciascuna squadra; da qui esito 1X2 (somma 100%), entrambe a segno, soglie e risultati esatti. Le altre statistiche hanno più variabilità di una Poisson: si usa una binomiale negativa con dispersione stimata dai dati del campionato. I totali sono la somma delle due squadre. Gli intervalli di previsione all'80% lasciano fuori il 10% più basso e il 10% più alto. Le probabilità delle soglie sono cumulate, quindi sempre coerenti: "almeno 5" non supera mai "almeno 4".</p>
       <h2>3. Taratura e verifica</h2><p>Emivita e prudenza sono scelte per ogni statistica sulla stagione ${esc(m.stagione_taratura)}, massimizzando la verosimiglianza delle partite (squadra e totale). La verifica in <a href="#precisione">Quanto è preciso?</a> usa solo le stagioni successive. Ogni pronostico è salvato con data, ora, versione del modello e data dei dati più recenti usati.</p>
       <div class="scroll"><table><thead><tr><th>Statistica</th><th class="num">Emivita (giorni)</th><th class="num">Prudenza k</th><th class="num">Fattore campo k</th></tr></thead><tbody>${Object.entries(p).map(([k, v]) => `<tr><td>${esc(k.replace('_', ' '))}</td><td class="num">${v.half_life_days}</td><td class="num">${v.k_shrink}</td><td class="num">${v.k_venue}</td></tr>`).join('')}</tbody></table></div>
-      <h2>4. Limiti</h2><ul><li>Statistiche avanzate (xG, grandi occasioni, passaggi, dribbling, contrasti, duelli) e dati per giocatore sono disponibili per la Premier League tramite FPL-Core-Insights (origine FotMob); per Serie A, Bundesliga e LaLiga servono API-Football o un'altra fonte con dati individuali. L'xG dei fornitori viene mostrato ma non entra nel modello.</li><li>Sui totali di gol e corner il modello fa poco meglio, o non meglio, della media del campionato: la pagina di verifica lo mostra apertamente.</li><li>Infortuni, turnover e motivazioni non sono misurati.</li></ul>`);
+      <h2>4. Limiti</h2><ul><li>Dati per giocatore: Serie A dai Match Report ufficiali della Lega, con falli commessi, fuorigioco e titolari da ESPN; Premier League da FPL-Core-Insights (FotMob); Bundesliga e LaLiga da ESPN, con i minuti stimati dalle sostituzioni. Contrasti di squadra (effettuati, vinti, persi) per tutti e quattro i campionati da ESPN; contrasti e dribbling del singolo giocatore solo in Premier League, perché nessuna fonte gratuita li pubblica per gli altri campionati. L'xG dei fornitori viene mostrato ma non entra nel modello.</li><li>Sui totali di gol e corner il modello fa poco meglio, o non meglio, della media del campionato: la pagina di verifica lo mostra apertamente.</li><li>Infortuni, turnover e motivazioni non sono misurati.</li></ul>`);
+  }
+
+  // ---------------------------------------------------------------- installazione
+  function installHelp() {
+    const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+    app.innerHTML = band(`<h1>Installa l'app</h1>
+      ${standalone ? '<p class="info">Stai già usando l\'app installata.</p>' : ''}
+      ${window.__installPrompt ? '<p><button class="btn primary" id="do-install">Installa ora</button></p>' : ''}
+      <ol class="steps">
+        <li>Apri l'indirizzo dell'app direttamente in <b>Chrome</b>, scrivendolo nella barra degli indirizzi. Se l'hai aperto toccando un link dentro un'altra app (Claude, WhatsApp, Telegram…), si apre un browser interno che non permette l'installazione: tocca ⋮ e scegli <i>Apri in Chrome</i>.</li>
+        <li>Non usare una scheda in incognito.</li>
+        <li>In Chrome tocca il menu ⋮ in alto a destra e scegli <b>Installa app</b>. Se non c'è, scegli <b>Aggiungi a schermata Home</b> e poi <b>Installa</b>.</li>
+        <li>Con Samsung Internet: menu ≡ → <b>Aggiungi pagina a</b> → <b>Schermata Home</b>.</li>
+        <li>Sulla schermata Home compare l'icona <b>Calcio</b>: si apre a tutto schermo e si aggiorna da sola ogni mattina.</li>
+      </ol>
+      <p class="note">Se compare il pulsante <b>Installa app</b> in alto, accanto allo stato dell'aggiornamento, puoi toccare direttamente quello.</p>`);
+    const b = document.getElementById('do-install'); if (b) b.onclick = () => window.__doInstall && window.__doInstall();
   }
 
   function notFound() { app.innerHTML = band('<h1>Pagina non trovata</h1><p><a href="#oggi">Torna alle partite di oggi</a></p>'); }
@@ -626,6 +647,7 @@
       else if (h === 'precisione') await precision();
       else if (h === 'fonti') sources();
       else if (h === 'metodo') method();
+      else if (h === 'installa') installHelp();
       else notFound();
       if (!/^partita-/.test(h)) document.title = 'Calcio in chiaro';
     } catch (e) {

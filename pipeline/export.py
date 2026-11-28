@@ -106,7 +106,13 @@ def export(con, evaluation, sources_info, resolver, log, now_ts=None):
                 pst = defaultdict(dict)
                 for r in con.execute("SELECT s.* FROM player_match_stat s JOIN match m ON m.id=s.match_id "
                                      "WHERE m.league=? AND m.season=?", (lg, s)):
-                    pst[(r["match_id"], r["player_id"], r["team_id"])][r["metric"]] = r["value"]
+                    if not r["metric"].startswith("_"):  # metriche interne (es. numero di maglia) non esportate
+                        pst[(r["match_id"], r["player_id"], r["team_id"])][r["metric"]] = r["value"]
+                for v in pst.values():  # valori derivati da due conteggi della stessa fonte
+                    if v.get("contrasti") is not None and v.get("contrasti_vinti") is not None:
+                        v["contrasti_persi"] = max(0.0, v["contrasti"] - v["contrasti_vinti"])
+                    if v.get("duelli") is None and v.get("duelli_vinti") is not None and v.get("duelli_persi") is not None:
+                        v["duelli"] = v["duelli_vinti"] + v["duelli_persi"]
                 pnames = {r["id"]: [r["name"], r["team_id"], r["position"]] for r in con.execute(
                     "SELECT * FROM player WHERE id IN (SELECT player_id FROM lineup UNION SELECT player_id FROM player_match_stat)")}
                 lus = defaultdict(list)
@@ -118,7 +124,7 @@ def export(con, evaluation, sources_info, resolver, log, now_ts=None):
                 mi = {x: i for i, x in enumerate(mids)}; pi = {x: i for i, x in enumerate(pids)}; ti = {x: i for i, x in enumerate(tids)}
                 cv = lambda v: None if v is None else (int(v) if v == int(v) else round(v, 2))
                 rows = [[mi[k[0]], pi[k[1]], ti[k[2]]] + [cv(v.get(mm)) for mm in metrics] for k, v in pst.items()]
-                NAMES = {"fplcore": "FPL-Core-Insights (FotMob, Fantasy Premier League)", "apifootball": "API-Football", "legaseriea": "Match Report ufficiali Lega Serie A"}
+                NAMES = {"fplcore": "FPL-Core-Insights (FotMob, Fantasy Premier League)", "apifootball": "API-Football", "legaseriea": "Match Report ufficiali Lega Serie A", "espn": "ESPN"}
                 fonte = ", ".join(sorted({NAMES.get(x[0], x[0]) for x in con.execute(
                     "SELECT DISTINCT s.source FROM player_match_stat s JOIN match m ON m.id=s.match_id WHERE m.league=? AND m.season=?", (lg, s))}))
                 sizes[f"pl/{lg}-{code}"] = _w(out / "pl" / f"{lg}-{code}.json", {
